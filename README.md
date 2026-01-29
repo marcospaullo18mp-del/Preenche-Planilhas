@@ -11,7 +11,7 @@ Aplicativo Streamlit que lê um **PDF de Plano de Aplicação** e gera uma **pla
 ## Estrutura do projeto
 - `app.py` — interface Streamlit
 - `preencher_planilha.py` — lógica de extração e geração do Excel
-- `Itens NT.xlsx` — template da planilha
+- `Planilha Base.xlsx` — template da planilha
 - `Logo.png` — logo exibida no topo
 - `requirements.txt` — dependências
 
@@ -30,7 +30,7 @@ streamlit run app.py
 4. Baixe a planilha gerada no botão **Baixar planilha**.
 
 ## Observações
-- O template `Itens NT.xlsx` deve estar na mesma pasta do app.
+- O template `Planilha Base.xlsx` deve estar na mesma pasta do app.
 - O PDF deve seguir o padrão de “META ESPECÍFICA” e “Item” para extração correta.
 
 ## Deploy gratuito (Streamlit Cloud)

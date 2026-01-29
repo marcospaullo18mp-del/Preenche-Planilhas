@@ -34,6 +34,8 @@ OUTPUT_HEADERS = [
     "Número do Item",
     "Ação conforme Art. 7º da portaria nº 685",
     "Material/Serviço",
+    "Descrição",
+    "Destinação",
     "Instituição",
     "Natureza da Despesa",
     "Quantidade Planejada",
@@ -172,39 +174,54 @@ def build_material(bem, descricao, destinacao):
         parts.append(f"Destinação: {destinacao}")
     return " | ".join(parts)
 
-def fill_worksheet(ws, rows):
+def fill_worksheet(ws, rows, headers):
     # Clear previous data (keep headers)
-    for row in ws.iter_rows(min_row=3, max_row=ws.max_row, max_col=len(OUTPUT_HEADERS)):
+    for row in ws.iter_rows(min_row=3, max_row=ws.max_row, max_col=len(headers)):
         for cell in row:
             cell.value = None
 
     start_row = 3
     for idx, row_data in enumerate(rows, start=start_row):
-        for col_idx, header in enumerate(OUTPUT_HEADERS, start=1):
+        for col_idx, header in enumerate(headers, start=1):
             ws.cell(row=idx, column=col_idx, value=row_data.get(header, ""))
 
 
-def write_excel(template_path: Path, output_path: Path, rows):
+def get_template_headers(template_path: Path):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    fill_worksheet(ws, rows)
+    headers = []
+    for cell in ws[2]:
+        if cell.value:
+            headers.append(str(cell.value).strip())
+    return headers or OUTPUT_HEADERS
+
+
+def write_excel(template_path: Path, output_path: Path, rows, headers):
+    wb = openpyxl.load_workbook(template_path)
+    ws = wb.active
+    fill_worksheet(ws, rows, headers)
     wb.save(output_path)
 
 
-def generate_excel_bytes(template_path: Path, rows) -> bytes:
+def generate_excel_bytes(template_path: Path, rows, headers) -> bytes:
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    fill_worksheet(ws, rows)
+    fill_worksheet(ws, rows, headers)
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
 
 
-def build_rows(parsed_items):
+def build_rows(parsed_items, headers):
+    has_descricao = "Descrição" in headers
+    has_destinacao = "Destinação" in headers
     rows = []
     for item in parsed_items:
         fields = extract_fields(item["lines"])
-        material = build_material(fields["bem"], fields["descricao"], fields["destinacao"])
+        if has_descricao or has_destinacao:
+            material = fields["bem"]
+        else:
+            material = build_material(fields["bem"], fields["descricao"], fields["destinacao"])
         valor_total = strip_currency(fields["valor_total"])
         quantidade = parse_int(fields["quantidade"])
         row = {
@@ -212,6 +229,8 @@ def build_rows(parsed_items):
             "Número do Item": item["item"],
             "Ação conforme Art. 7º da portaria nº 685": fields["art"],
             "Material/Serviço": material,
+            "Descrição": fields["descricao"] if has_descricao else "",
+            "Destinação": fields["destinacao"] if has_destinacao else "",
             "Instituição": fields["instituicao"],
             "Natureza da Despesa": fields["natureza"],
             "Quantidade Planejada": quantidade,
@@ -244,8 +263,9 @@ def main():
     if not parsed_items:
         raise SystemExit("Nenhum item encontrado no PDF.")
 
-    rows = build_rows(parsed_items)
-    write_excel(xlsx_path, output_path, rows)
+    headers = get_template_headers(xlsx_path)
+    rows = build_rows(parsed_items, headers)
+    write_excel(xlsx_path, output_path, rows, headers)
 
     print(f"Itens extraídos: {len(rows)}")
     print(f"Arquivo gerado: {output_path}")
