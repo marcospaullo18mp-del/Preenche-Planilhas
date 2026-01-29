@@ -8,7 +8,7 @@ from preencher_planilha import (
     parse_items,
     build_rows,
     generate_excel_bytes,
-    get_template_headers,
+    get_template_header_info,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -65,13 +65,13 @@ st.markdown(
       margin: 0 0 16px 0;
     }
     div[data-testid="stDownloadButton"] button {
-      background: #00c853;
-      border: 1px solid #00b84c;
+      background: #217346;
+      border: 1px solid #1e6a40;
       color: #ffffff;
     }
     div[data-testid="stDownloadButton"] button:hover {
-      background: #00b84c;
-      border-color: #00b84c;
+      background: #1b5e38;
+      border-color: #1b5e38;
       color: #ffffff;
     }
     .blank-cells {
@@ -152,9 +152,9 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                     st.session_state.result = None
                 else:
                     status.write("Montando planilha")
-                    headers = get_template_headers(TEMPLATE_PATH)
-                    rows = build_rows(parsed_items, headers)
-                    excel_bytes = generate_excel_bytes(TEMPLATE_PATH, rows, headers)
+                    _, header_map = get_template_header_info(TEMPLATE_PATH)
+                    rows = build_rows(parsed_items, header_map)
+                    excel_bytes = generate_excel_bytes(TEMPLATE_PATH, rows, header_map)
 
                     meta_counts = {}
                     missing_cells = set()
@@ -165,7 +165,7 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                         item_num = row_data.get("Número do Item")
                         meta_counts[meta] = meta_counts.get(meta, 0) + 1
                         excel_row = start_row + index
-                        for col_index, header in enumerate(headers, start=1):
+                        for header, col_index in header_map.items():
                             value = row_data.get(header)
                             if value is None or value == "":
                                 cell = f"{get_column_letter(col_index)}{excel_row}"
