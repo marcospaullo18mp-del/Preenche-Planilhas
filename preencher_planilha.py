@@ -8,26 +8,29 @@ import pdfplumber
 import openpyxl
 
 META_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
-ITEM_RE = re.compile(r"^Item\s+(\d+)\s+Planejado", re.IGNORECASE)
+ITEM_RE = re.compile(
+    r"^Item\s*(\d+)\s*(?:Planejado|Aprovado|Cancelado)?", re.IGNORECASE
+)
 
-CAPTURE_LABELS = {
-    "Art. 7º (685):": "art",
-    "Bem/Serviço:": "bem",
-    "Descrição:": "descricao",
-    "Destinação:": "destinacao",
-    "Unidade de Medida:": "unidade",
-    "Qtd. Planejada:": "quantidade",
-    "Natureza (ND):": "natureza",
-    "Instituição:": "instituicao",
-    "Valor Total:": "valor_total",
-}
+CAPTURE_PATTERNS = [
+    ("art", re.compile(r"^Art\.?\s*(?:6|7|8)\s*º?\s*(?:\(\d+\))?\s*:\s*(.*)", re.IGNORECASE)),
+    ("bem", re.compile(r"^(?:Bem|Material)/Servi[cç]o:\s*(.*)", re.IGNORECASE)),
+    ("descricao", re.compile(r"^Descri[cç][aã]o:\s*(.*)", re.IGNORECASE)),
+    ("destinacao", re.compile(r"^Destina[cç][aã]o:\s*(.*)", re.IGNORECASE)),
+    ("unidade", re.compile(r"^Unidade de Medida:\s*(.*)", re.IGNORECASE)),
+    ("quantidade", re.compile(r"^Qtd\.?\s*Planejada:\s*(.*)", re.IGNORECASE)),
+    ("quantidade", re.compile(r"^Quantidade Planejada:\s*(.*)", re.IGNORECASE)),
+    ("natureza", re.compile(r"^Natureza\s*\(ND\):\s*(.*)", re.IGNORECASE)),
+    ("instituicao", re.compile(r"^Institui[cç][aã]o:\s*(.*)", re.IGNORECASE)),
+    ("valor_total", re.compile(r"^Valor Total:\s*(.*)", re.IGNORECASE)),
+]
 
-STOP_LABELS = set(CAPTURE_LABELS.keys()) | {
-    "Cód. Senasp:",
-    "Valor Originário Planejado:",
-    "Valor Suplementar Planejado:",
-    "Valor Rendimento Planejado:",
-}
+STOP_PATTERNS = [
+    re.compile(r"^C[oó]d\.?\s*Senasp:", re.IGNORECASE),
+    re.compile(r"^Valor Origin[aá]rio Planejado:", re.IGNORECASE),
+    re.compile(r"^Valor Suplementar Planejado:", re.IGNORECASE),
+    re.compile(r"^Valor Rendimento Planejado:", re.IGNORECASE),
+]
 
 OUTPUT_HEADERS = [
     "Número da Meta Específica",
@@ -62,6 +65,20 @@ def parse_int(value: str):
     return int(digits) if digits else ""
 
 
+def normalize_pdf_text(text: str) -> str:
+    text = text.replace("\x0c", "\n")
+    text = re.sub(
+        r"(META ESPEC[ÍI]FICA\s+\d+)", r"\n\1\n", text, flags=re.IGNORECASE
+    )
+    text = re.sub(
+        r"(Item\s*\d+\s*(?:Planejado|Aprovado|Cancelado)?)",
+        r"\n\1\n",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text
+
+
 def clean_lines(text: str):
     lines = []
     for raw in text.splitlines():
@@ -82,7 +99,7 @@ def extract_lines_from_pdf(pdf_path: Path):
     lines = []
     with pdfplumber.open(str(pdf_path)) as pdf:
         for page in pdf.pages:
-            text = page.extract_text() or ""
+            text = normalize_pdf_text(page.extract_text() or "")
             lines.extend(clean_lines(text))
     return lines
 
@@ -92,7 +109,7 @@ def extract_lines_from_pdf_file(file_obj):
     lines = []
     with pdfplumber.open(file_obj) as pdf:
         for page in pdf.pages:
-            text = page.extract_text() or ""
+            text = normalize_pdf_text(page.extract_text() or "")
             lines.extend(clean_lines(text))
     return lines
 
@@ -135,24 +152,29 @@ def parse_items(lines):
 
 
 def extract_fields(item_lines):
-    fields = {key: [] for key in CAPTURE_LABELS.values()}
+    fields = {key: [] for key, _ in CAPTURE_PATTERNS}
     current_field = None
 
     for line in item_lines:
-        label = None
-        for candidate in STOP_LABELS:
-            if line.startswith(candidate):
-                label = candidate
+        matched = False
+        for stop in STOP_PATTERNS:
+            if stop.match(line):
+                current_field = None
+                matched = True
                 break
+        if matched:
+            continue
 
-        if label:
-            current_field = CAPTURE_LABELS.get(label)
-            if current_field:
-                content = line[len(label):].strip()
+        for field, pattern in CAPTURE_PATTERNS:
+            match = pattern.match(line)
+            if match:
+                current_field = field
+                content = match.group(1).strip()
                 if content:
                     fields[current_field].append(content)
-            else:
-                current_field = None
+                matched = True
+                break
+        if matched:
             continue
 
         if current_field:
@@ -174,47 +196,55 @@ def build_material(bem, descricao, destinacao):
         parts.append(f"Destinação: {destinacao}")
     return " | ".join(parts)
 
-def fill_worksheet(ws, rows, headers):
+def fill_worksheet(ws, rows, header_map):
     # Clear previous data (keep headers)
-    for row in ws.iter_rows(min_row=3, max_row=ws.max_row, max_col=len(headers)):
+    max_col = max(header_map.values()) if header_map else ws.max_column
+    for row in ws.iter_rows(min_row=3, max_row=ws.max_row, max_col=max_col):
         for cell in row:
             cell.value = None
 
     start_row = 3
     for idx, row_data in enumerate(rows, start=start_row):
-        for col_idx, header in enumerate(headers, start=1):
+        for header, col_idx in header_map.items():
             ws.cell(row=idx, column=col_idx, value=row_data.get(header, ""))
 
 
-def get_template_headers(template_path: Path):
+def get_template_header_info(template_path: Path):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
     headers = []
+    header_map = {}
     for cell in ws[2]:
         if cell.value:
-            headers.append(str(cell.value).strip())
-    return headers or OUTPUT_HEADERS
+            header = str(cell.value).strip()
+            headers.append(header)
+            if header not in header_map:
+                header_map[header] = cell.column
+    if not header_map:
+        header_map = {header: idx + 1 for idx, header in enumerate(OUTPUT_HEADERS)}
+        headers = OUTPUT_HEADERS[:]
+    return headers, header_map
 
 
-def write_excel(template_path: Path, output_path: Path, rows, headers):
+def write_excel(template_path: Path, output_path: Path, rows, header_map):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    fill_worksheet(ws, rows, headers)
+    fill_worksheet(ws, rows, header_map)
     wb.save(output_path)
 
 
-def generate_excel_bytes(template_path: Path, rows, headers) -> bytes:
+def generate_excel_bytes(template_path: Path, rows, header_map) -> bytes:
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    fill_worksheet(ws, rows, headers)
+    fill_worksheet(ws, rows, header_map)
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
 
 
-def build_rows(parsed_items, headers):
-    has_descricao = "Descrição" in headers
-    has_destinacao = "Destinação" in headers
+def build_rows(parsed_items, header_map):
+    has_descricao = "Descrição" in header_map
+    has_destinacao = "Destinação" in header_map
     rows = []
     for item in parsed_items:
         fields = extract_fields(item["lines"])
@@ -263,9 +293,9 @@ def main():
     if not parsed_items:
         raise SystemExit("Nenhum item encontrado no PDF.")
 
-    headers = get_template_headers(xlsx_path)
-    rows = build_rows(parsed_items, headers)
-    write_excel(xlsx_path, output_path, rows, headers)
+    _, header_map = get_template_header_info(xlsx_path)
+    rows = build_rows(parsed_items, header_map)
+    write_excel(xlsx_path, output_path, rows, header_map)
 
     print(f"Itens extraídos: {len(rows)}")
     print(f"Arquivo gerado: {output_path}")
