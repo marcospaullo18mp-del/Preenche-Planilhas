@@ -202,7 +202,7 @@ if result:
     st.download_button(
         "Baixar Planilha",
         data=result["excel_bytes"],
-        file_name="Planilha Base - preenchido.xlsx",
+        file_name="Planilha de Itens.xlsx",
         mime=(
             "application/vnd.openxmlformats-officedocument."
             "spreadsheetml.sheet"
