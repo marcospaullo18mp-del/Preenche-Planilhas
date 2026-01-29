@@ -65,13 +65,13 @@ st.markdown(
       margin: 0 0 16px 0;
     }
     div[data-testid="stDownloadButton"] button {
-      background: #00e676;
-      border: 1px solid #00d86d;
+      background: #00c853;
+      border: 1px solid #00b84c;
       color: #ffffff;
     }
     div[data-testid="stDownloadButton"] button:hover {
-      background: #00c853;
-      border-color: #00c853;
+      background: #00b84c;
+      border-color: #00b84c;
       color: #ffffff;
     }
     .blank-cells {
@@ -199,7 +199,7 @@ if result:
         st.warning("Alguns itens possuem campos em branco. Veja os detalhes abaixo.")
 
     st.download_button(
-        "Baixar planilha",
+        "Baixar Planilha",
         data=result["excel_bytes"],
         file_name="Itens NT - preenchido.xlsx",
         mime=(
