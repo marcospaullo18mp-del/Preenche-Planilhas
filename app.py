@@ -64,6 +64,20 @@ st.markdown(
     .app-subtitle { 
       margin: 0 0 16px 0;
     }
+    .blank-cells {
+      border-collapse: collapse;
+      width: auto;
+    }
+    .blank-cells th,
+    .blank-cells td {
+      border: 1px solid #e6e6e6;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    .blank-cells th {
+      background: #fafafa;
+      font-weight: 600;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -186,6 +200,15 @@ if result:
 
     if missing_cells:
         st.subheader("Células em branco")
-        st.table([{"Célula": cell} for cell in missing_cells])
+        rows_html = "".join(f"<tr><td>{cell}</td></tr>" for cell in missing_cells)
+        st.markdown(
+            f"""
+            <table class="blank-cells">
+              <thead><tr><th>Célula</th></tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>
+            """,
+            unsafe_allow_html=True,
+        )
 
     # Preview e detalhes removidos conforme solicitado.
