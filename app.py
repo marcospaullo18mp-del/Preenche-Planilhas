@@ -65,13 +65,13 @@ st.markdown(
       margin: 0 0 16px 0;
     }
     div[data-testid="stDownloadButton"] button {
-      background: #00c853;
-      border: 1px solid #00b84c;
+      background: #00e676;
+      border: 1px solid #00d86d;
       color: #ffffff;
     }
     div[data-testid="stDownloadButton"] button:hover {
-      background: #00b84c;
-      border-color: #00b84c;
+      background: #00c853;
+      border-color: #00c853;
       color: #ffffff;
     }
     .blank-cells {
