@@ -170,7 +170,7 @@ def build_material(bem, descricao, destinacao):
         parts.append(f"Descrição: {descricao}")
     if destinacao:
         parts.append(f"Destinação: {destinacao}")
-    return "\n".join(parts)
+    return " | ".join(parts)
 
 def fill_worksheet(ws, rows):
     # Clear previous data (keep headers)
