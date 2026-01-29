@@ -60,6 +60,24 @@ def strip_currency(value: str) -> str:
     return value
 
 
+def format_currency(value: str) -> str:
+    value = strip_currency(value)
+    if not value:
+        return ""
+    if "," in value:
+        integer_part, decimal_part = value.split(",", 1)
+    else:
+        integer_part, decimal_part = value, "00"
+    integer_part = re.sub(r"[^0-9]", "", integer_part)
+    decimal_part = re.sub(r"[^0-9]", "", decimal_part)[:2].ljust(2, "0")
+    integer_part = integer_part.lstrip("0") or "0"
+    grouped = ""
+    while integer_part:
+        grouped = integer_part[-3:] + (f".{grouped}" if grouped else "")
+        integer_part = integer_part[:-3]
+    return f"R$ {grouped},{decimal_part}"
+
+
 def parse_int(value: str):
     digits = re.sub(r"[^0-9]", "", value or "")
     return int(digits) if digits else ""
@@ -252,7 +270,7 @@ def build_rows(parsed_items, header_map):
             material = fields["bem"]
         else:
             material = build_material(fields["bem"], fields["descricao"], fields["destinacao"])
-        valor_total = strip_currency(fields["valor_total"])
+        valor_total = format_currency(fields["valor_total"])
         quantidade = parse_int(fields["quantidade"])
         row = {
             "Número da Meta Específica": item["meta"],
