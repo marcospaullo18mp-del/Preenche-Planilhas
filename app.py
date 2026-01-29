@@ -64,6 +64,16 @@ st.markdown(
     .app-subtitle { 
       margin: 0 0 16px 0;
     }
+    div[data-testid="stDownloadButton"] button {
+      background: #00c853;
+      border: 1px solid #00b84c;
+      color: #ffffff;
+    }
+    div[data-testid="stDownloadButton"] button:hover {
+      background: #00b84c;
+      border-color: #00b84c;
+      color: #ffffff;
+    }
     .blank-cells {
       border-collapse: collapse;
       width: auto;
