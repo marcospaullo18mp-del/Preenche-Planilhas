@@ -289,6 +289,10 @@ def write_excel(template_path: Path, output_path: Path, rows, header_map):
     ws = wb.active
     update_action_header(ws, rows, header_map)
     fill_worksheet(ws, rows, header_map)
+    ws.sheet_view.topLeftCell = "A1"
+    ws.sheet_view.selection[0].activeCell = "A1"
+    ws.sheet_view.selection[0].sqref = "A1"
+    ws.sheet_view.zoomScale = 100
     wb.save(output_path)
 
 
@@ -297,6 +301,10 @@ def generate_excel_bytes(template_path: Path, rows, header_map) -> bytes:
     ws = wb.active
     update_action_header(ws, rows, header_map)
     fill_worksheet(ws, rows, header_map)
+    ws.sheet_view.topLeftCell = "A1"
+    ws.sheet_view.selection[0].activeCell = "A1"
+    ws.sheet_view.selection[0].sqref = "A1"
+    ws.sheet_view.zoomScale = 100
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
