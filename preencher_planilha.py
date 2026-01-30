@@ -11,9 +11,17 @@ META_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
 ITEM_RE = re.compile(
     r"^Item\s*(\d+)\s*(?:Planejado|Aprovado|Cancelado)?", re.IGNORECASE
 )
+ACTION_HEADER_KEY = "acao_art"
+ACTION_HEADER_PATTERN = re.compile(
+    r"^Ação conforme Art\.\s*\d+º\s+da portaria nº 685$",
+    re.IGNORECASE,
+)
+ART_PATTERN = re.compile(
+    r"^Art\.?\s*(6|7|8)\s*º?\s*(?:\((\d+)\))?\s*:\s*(.*)",
+    re.IGNORECASE,
+)
 
 CAPTURE_PATTERNS = [
-    ("art", re.compile(r"^Art\.?\s*(?:6|7|8)\s*º?\s*(?:\(\d+\))?\s*:\s*(.*)", re.IGNORECASE)),
     ("bem", re.compile(r"^(?:Bem|Material)/Servi[cç]o:\s*(.*)", re.IGNORECASE)),
     ("descricao", re.compile(r"^Descri[cç][aã]o:\s*(.*)", re.IGNORECASE)),
     ("destinacao", re.compile(r"^Destina[cç][aã]o:\s*(.*)", re.IGNORECASE)),
@@ -171,6 +179,7 @@ def parse_items(lines):
 
 def extract_fields(item_lines):
     fields = {key: [] for key, _ in CAPTURE_PATTERNS}
+    fields["art"] = []
     current_field = None
 
     for line in item_lines:
@@ -181,6 +190,21 @@ def extract_fields(item_lines):
                 matched = True
                 break
         if matched:
+            continue
+
+        art_match = ART_PATTERN.match(line)
+        if art_match:
+            current_field = "art"
+            art_num = art_match.group(1)
+            art_ref = art_match.group(2)
+            art_body = art_match.group(3).strip()
+            prefix = f"Art. {art_num}º"
+            if art_ref:
+                prefix = f"{prefix} ({art_ref})"
+            if art_body:
+                fields[current_field].append(f"{prefix}: {art_body}")
+            else:
+                fields[current_field].append(f"{prefix}:")
             continue
 
         for field, pattern in CAPTURE_PATTERNS:
@@ -236,17 +260,39 @@ def get_template_header_info(template_path: Path):
         if cell.value:
             header = str(cell.value).strip()
             headers.append(header)
-            if header not in header_map:
-                header_map[header] = cell.column
+            key = ACTION_HEADER_KEY if ACTION_HEADER_PATTERN.match(header) else header
+            if key not in header_map:
+                header_map[key] = cell.column
     if not header_map:
-        header_map = {header: idx + 1 for idx, header in enumerate(OUTPUT_HEADERS)}
         headers = OUTPUT_HEADERS[:]
+        header_map = {}
+        for idx, header in enumerate(headers):
+            key = ACTION_HEADER_KEY if ACTION_HEADER_PATTERN.match(header) else header
+            if key not in header_map:
+                header_map[key] = idx + 1
     return headers, header_map
+
+
+def update_action_header(ws, rows, header_map):
+    col_idx = header_map.get(ACTION_HEADER_KEY)
+    if not col_idx or not rows:
+        return
+    action_value = rows[0].get(ACTION_HEADER_KEY, "")
+    match = re.search(r"Art\.?\s*(6|7|8)", action_value)
+    if not match:
+        return
+    art_num = match.group(1)
+    ws.cell(
+        row=2,
+        column=col_idx,
+        value=f"Ação conforme Art. {art_num}º da portaria nº 685",
+    )
 
 
 def write_excel(template_path: Path, output_path: Path, rows, header_map):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
+    update_action_header(ws, rows, header_map)
     fill_worksheet(ws, rows, header_map)
     wb.save(output_path)
 
@@ -254,6 +300,7 @@ def write_excel(template_path: Path, output_path: Path, rows, header_map):
 def generate_excel_bytes(template_path: Path, rows, header_map) -> bytes:
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
+    update_action_header(ws, rows, header_map)
     fill_worksheet(ws, rows, header_map)
     buffer = BytesIO()
     wb.save(buffer)
@@ -275,7 +322,7 @@ def build_rows(parsed_items, header_map):
         row = {
             "Número da Meta Específica": item["meta"],
             "Número do Item": item["item"],
-            "Ação conforme Art. 7º da portaria nº 685": fields["art"],
+            ACTION_HEADER_KEY: fields["art"],
             "Material/Serviço": material,
             "Descrição": fields["descricao"] if has_descricao else "",
             "Destinação": fields["destinacao"] if has_destinacao else "",
