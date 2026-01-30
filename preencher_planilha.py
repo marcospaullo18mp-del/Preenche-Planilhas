@@ -9,7 +9,7 @@ import openpyxl
 
 META_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
 ITEM_RE = re.compile(
-    r"^Item\s*(\d+)\s*(?:Planejado|Aprovado|Cancelado)?", re.IGNORECASE
+    r"^Item\s*(\d+)\s*(Planejado|Aprovado|Cancelado)?", re.IGNORECASE
 )
 ACTION_HEADER_KEY = "acao_art"
 ACTION_HEADER_NUM_KEY = "acao_art_num"
@@ -145,18 +145,21 @@ def parse_items(lines):
     items = []
     current_meta = None
     current_item = None
+    current_status = None
     current_lines = []
 
     def flush():
-        nonlocal current_item, current_lines
+        nonlocal current_item, current_lines, current_status
         if current_meta is None or current_item is None:
             return
         items.append({
             "meta": current_meta,
             "item": current_item,
+            "status": current_status or "",
             "lines": current_lines[:],
         })
         current_item = None
+        current_status = None
         current_lines = []
 
     for line in lines:
@@ -169,6 +172,7 @@ def parse_items(lines):
         if item_match:
             flush()
             current_item = int(item_match.group(1))
+            current_status = (item_match.group(2) or "").capitalize()
             current_lines = []
             continue
         if current_item is not None:
@@ -335,7 +339,7 @@ def build_rows(parsed_items, header_map):
             "Quantidade Planejada": quantidade,
             "Unidade de Medida": fields["unidade"],
             "Valor Planejado Total": valor_total,
-            "Status do Item": "Planejado",
+            "Status do Item": item.get("status") or "Planejado",
         }
         rows.append(row)
     return rows
