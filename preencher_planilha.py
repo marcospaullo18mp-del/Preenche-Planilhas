@@ -12,6 +12,7 @@ ITEM_RE = re.compile(
     r"^Item\s*(\d+)\s*(?:Planejado|Aprovado|Cancelado)?", re.IGNORECASE
 )
 ACTION_HEADER_KEY = "acao_art"
+ACTION_HEADER_NUM_KEY = "acao_art_num"
 ACTION_HEADER_PATTERN = re.compile(
     r"^Ação conforme Art\.\s*\d+º\s+da portaria nº 685$",
     re.IGNORECASE,
@@ -180,6 +181,7 @@ def parse_items(lines):
 def extract_fields(item_lines):
     fields = {key: [] for key, _ in CAPTURE_PATTERNS}
     fields["art"] = []
+    fields["art_num"] = ""
     current_field = None
 
     for line in item_lines:
@@ -196,15 +198,10 @@ def extract_fields(item_lines):
         if art_match:
             current_field = "art"
             art_num = art_match.group(1)
-            art_ref = art_match.group(2)
             art_body = art_match.group(3).strip()
-            prefix = f"Art. {art_num}º"
-            if art_ref:
-                prefix = f"{prefix} ({art_ref})"
             if art_body:
-                fields[current_field].append(f"{prefix}: {art_body}")
-            else:
-                fields[current_field].append(f"{prefix}:")
+                fields[current_field].append(art_body)
+            fields["art_num"] = art_num
             continue
 
         for field, pattern in CAPTURE_PATTERNS:
@@ -277,11 +274,9 @@ def update_action_header(ws, rows, header_map):
     col_idx = header_map.get(ACTION_HEADER_KEY)
     if not col_idx or not rows:
         return
-    action_value = rows[0].get(ACTION_HEADER_KEY, "")
-    match = re.search(r"Art\.?\s*(6|7|8)", action_value)
-    if not match:
+    art_num = rows[0].get(ACTION_HEADER_NUM_KEY)
+    if not art_num:
         return
-    art_num = match.group(1)
     ws.cell(
         row=2,
         column=col_idx,
@@ -323,6 +318,7 @@ def build_rows(parsed_items, header_map):
             "Número da Meta Específica": item["meta"],
             "Número do Item": item["item"],
             ACTION_HEADER_KEY: fields["art"],
+            ACTION_HEADER_NUM_KEY: fields["art_num"],
             "Material/Serviço": material,
             "Descrição": fields["descricao"] if has_descricao else "",
             "Destinação": fields["destinacao"] if has_destinacao else "",
