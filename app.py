@@ -5,6 +5,8 @@ from openpyxl.utils import get_column_letter
 
 from preencher_planilha import (
     extract_lines_from_pdf_file,
+    extract_plan_signature,
+    resolve_art_by_plan_rule,
     parse_items,
     build_rows,
     generate_excel_bytes,
@@ -152,9 +154,18 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                     st.session_state.result = None
                 else:
                     status.write("Montando planilha")
+                    signature = extract_plan_signature(lines)
+                    art_num_preferred = resolve_art_by_plan_rule(
+                        signature["sigla"], signature["ano"]
+                    )
                     _, header_map = get_template_header_info(TEMPLATE_PATH)
                     rows = build_rows(parsed_items, header_map)
-                    excel_bytes = generate_excel_bytes(TEMPLATE_PATH, rows, header_map)
+                    excel_bytes = generate_excel_bytes(
+                        TEMPLATE_PATH,
+                        rows,
+                        header_map,
+                        art_num_preferred=art_num_preferred,
+                    )
 
                     meta_counts = {}
                     missing_cells = set()
