@@ -24,6 +24,7 @@ ART_PATTERN = re.compile(
     r"^Art\.?\s*(6|7|8)\s*º?\s*(?:\((\d+)\))?\s*:\s*(.*)",
     re.IGNORECASE,
 )
+ACTION_PATTERN = re.compile(r"^A[cç][aã]o:\s*(.*)", re.IGNORECASE)
 
 CAPTURE_PATTERNS = [
     ("bem", re.compile(r"^(?:Bem|Material)/Servi[cç]o:\s*(.*)", re.IGNORECASE)),
@@ -216,6 +217,7 @@ def parse_items(lines):
 
 def extract_fields(item_lines):
     fields = {key: [] for key, _ in CAPTURE_PATTERNS}
+    fields["acao"] = []
     fields["art"] = []
     fields["art_num"] = ""
     current_field = None
@@ -228,6 +230,14 @@ def extract_fields(item_lines):
                 matched = True
                 break
         if matched:
+            continue
+
+        action_match = ACTION_PATTERN.match(line)
+        if action_match:
+            current_field = "acao"
+            action_body = action_match.group(1).strip()
+            if action_body:
+                fields[current_field].append(action_body)
             continue
 
         art_match = ART_PATTERN.match(line)
@@ -371,7 +381,7 @@ def build_rows(parsed_items, header_map):
         row = {
             "Número da Meta Específica": item["meta"],
             "Número do Item": item["item"],
-            ACTION_HEADER_KEY: fields["art"],
+            ACTION_HEADER_KEY: fields["acao"] or fields["art"],
             ACTION_HEADER_NUM_KEY: fields["art_num"],
             "Material/Serviço": material,
             "Descrição": fields["descricao"] if has_descricao else "",
