@@ -17,6 +17,9 @@ ACTION_HEADER_PATTERN = re.compile(
     r"^Ação conforme Art\.\s*\d+º\s+da portaria nº 685$",
     re.IGNORECASE,
 )
+PLAN_SIGNATURE_RE = re.compile(
+    r"\b([A-Z]{2})\s*-\s*([A-Z0-9]+)\s*-\s*(20\d{2})\b"
+)
 ART_PATTERN = re.compile(
     r"^Art\.?\s*(6|7|8)\s*º?\s*(?:\((\d+)\))?\s*:\s*(.*)",
     re.IGNORECASE,
@@ -139,6 +142,35 @@ def extract_lines_from_pdf_file(file_obj):
             text = normalize_pdf_text(page.extract_text() or "")
             lines.extend(clean_lines(text))
     return lines
+
+
+def extract_plan_signature(lines):
+    max_lines = min(len(lines), 120)
+    for idx in range(max_lines):
+        line = (lines[idx] or "").strip()
+        if not line:
+            continue
+        match = PLAN_SIGNATURE_RE.search(line.upper())
+        if match:
+            return {
+                "sigla": match.group(2).upper(),
+                "ano": int(match.group(3)),
+                "raw_line": line,
+            }
+    return {"sigla": None, "ano": None, "raw_line": None}
+
+
+def resolve_art_by_plan_rule(sigla, ano):
+    if not sigla or not ano:
+        return None
+    sigla = str(sigla).upper()
+    if sigla in {"ECV", "FISPDS", "RMVI"} and 2019 <= ano <= 2025:
+        return "6"
+    if sigla == "EVM" and 2023 <= ano <= 2025:
+        return "7"
+    if sigla in {"VPSP", "MQVPSP"} and 2019 <= ano <= 2025:
+        return "8"
+    return None
 
 
 def parse_items(lines):
@@ -274,12 +306,16 @@ def get_template_header_info(template_path: Path):
     return headers, header_map
 
 
-def update_action_header(ws, rows, header_map):
+def update_action_header(ws, rows, header_map, art_num_preferred=None):
     col_idx = header_map.get(ACTION_HEADER_KEY)
     if not col_idx or not rows:
         return
-    art_num = rows[0].get(ACTION_HEADER_NUM_KEY)
+    art_num = art_num_preferred
     if not art_num:
+        art_num = rows[0].get(ACTION_HEADER_NUM_KEY)
+    if not art_num:
+        return
+    if str(art_num) not in {"6", "7", "8"}:
         return
     ws.cell(
         row=2,
@@ -288,10 +324,16 @@ def update_action_header(ws, rows, header_map):
     )
 
 
-def write_excel(template_path: Path, output_path: Path, rows, header_map):
+def write_excel(
+    template_path: Path,
+    output_path: Path,
+    rows,
+    header_map,
+    art_num_preferred=None,
+):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    update_action_header(ws, rows, header_map)
+    update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
     fill_worksheet(ws, rows, header_map)
     ws.sheet_view.topLeftCell = "A1"
     ws.sheet_view.selection[0].activeCell = "A1"
@@ -300,10 +342,10 @@ def write_excel(template_path: Path, output_path: Path, rows, header_map):
     wb.save(output_path)
 
 
-def generate_excel_bytes(template_path: Path, rows, header_map) -> bytes:
+def generate_excel_bytes(template_path: Path, rows, header_map, art_num_preferred=None) -> bytes:
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    update_action_header(ws, rows, header_map)
+    update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
     fill_worksheet(ws, rows, header_map)
     ws.sheet_view.topLeftCell = "A1"
     ws.sheet_view.selection[0].activeCell = "A1"
@@ -366,9 +408,17 @@ def main():
     if not parsed_items:
         raise SystemExit("Nenhum item encontrado no PDF.")
 
+    signature = extract_plan_signature(lines)
+    art_num_preferred = resolve_art_by_plan_rule(signature["sigla"], signature["ano"])
     _, header_map = get_template_header_info(xlsx_path)
     rows = build_rows(parsed_items, header_map)
-    write_excel(xlsx_path, output_path, rows, header_map)
+    write_excel(
+        xlsx_path,
+        output_path,
+        rows,
+        header_map,
+        art_num_preferred=art_num_preferred,
+    )
 
     print(f"Itens extraídos: {len(rows)}")
     print(f"Arquivo gerado: {output_path}")
