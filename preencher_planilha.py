@@ -257,6 +257,8 @@ def parse_items(lines):
 
 
 META_GERAL_LINE_RE = re.compile(r"^Meta Geral$", re.IGNORECASE)
+INDICADOR_GERAL_LINE_RE = re.compile(r"^Indicador Geral de Resultado$", re.IGNORECASE)
+VALOR_REFERENCIA_RE = re.compile(r"valor de refer[eê]ncia\s*:", re.IGNORECASE)
 META_ESPECIFICA_LINE_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
 SECTION_LABEL_PATTERNS = [
     ("descricao_indicador", re.compile(r"^Descri[cç][aã]o do Indicador:\s*(.*)", re.IGNORECASE)),
@@ -279,18 +281,40 @@ def extract_meta_geral(lines) -> str:
     return ""
 
 
+def extract_indicador_geral_completo(lines) -> str:
+    for idx, line in enumerate(lines):
+        if not INDICADOR_GERAL_LINE_RE.match(line):
+            continue
+        collected = []
+        for next_line in lines[idx + 1:]:
+            if re.match(r"^(Meta Geral|META ESPEC[ÍI]FICA)", next_line, re.IGNORECASE):
+                break
+            collected.append(next_line)
+        return normalize(" ".join(collected))
+    return ""
+
+
 def extract_indicador_geral_valor_referencia(lines) -> str:
     for idx, line in enumerate(lines):
-        marker_idx = line.find("Valor de Referência:")
-        if marker_idx == -1:
+        marker_match = VALOR_REFERENCIA_RE.search(line)
+        if not marker_match:
             continue
-        collected = [line[marker_idx:].strip()]
+        collected = [line[marker_match.start():].strip()]
         for next_line in lines[idx + 1:]:
             if re.match(r"^(META ESPEC[ÍI]FICA|Descri[cç][aã]o do Indicador:|Itens da Meta|Status:)", next_line, re.IGNORECASE):
                 break
             collected.append(next_line)
         return normalize(" ".join(collected))
     return ""
+
+
+def extract_analysis_data(lines):
+    return {
+        "zero_indicador_geral": extract_indicador_geral_completo(lines),
+        "one_meta_geral": extract_meta_geral(lines),
+        "three_valor_referencia": extract_indicador_geral_valor_referencia(lines),
+        "sections": extract_meta_especifica_sections(lines),
+    }
 
 
 def _finalize_meta_section(section):
@@ -462,6 +486,42 @@ def _inject_descricao_formula(base_text: str, descricao: str, formula: str) -> s
     return f"{pre}{marker_desc}\n{desc_value}\n\n{marker_formula}\n{formula_value}{suffix}"
 
 
+def replace_placeholder_segment(base_text: str, token: str, value: str) -> str:
+    text = str(base_text or "")
+    pattern = re.compile(re.escape(token) + r".*?" + re.escape(token), re.DOTALL)
+    if not pattern.search(text):
+        return text
+    return pattern.sub(value or "", text)
+
+
+def collect_analysis_missing_cells(analysis_data):
+    missing_cells = set()
+    if not normalize(analysis_data.get("zero_indicador_geral", "")):
+        missing_cells.add("F10")
+    if not normalize(analysis_data.get("one_meta_geral", "")):
+        missing_cells.add("A8")
+
+    sections = analysis_data.get("sections") or []
+    reference = normalize(analysis_data.get("three_valor_referencia", ""))
+    for idx, section in enumerate(sections, start=1):
+        start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
+        if not normalize(section.get("meta_texto", "")):
+            missing_cells.add(f"A{start_row}")
+        if not reference:
+            missing_cells.add(f"E{start_row}")
+        if not normalize(section.get("descricao_indicador", "")) or not normalize(
+            section.get("formula", "")
+        ):
+            missing_cells.add(f"F{start_row}")
+        if not normalize(section.get("meta_pesp", "")):
+            missing_cells.add(f"G{start_row}")
+        if not normalize(section.get("meta_pnsp", "")):
+            missing_cells.add(f"H{start_row}")
+        if not normalize(section.get("carteira_mjsp", "")):
+            missing_cells.add(f"I{start_row}")
+    return sorted(missing_cells)
+
+
 def build_material(bem, descricao, destinacao):
     parts = []
     if bem:
@@ -607,50 +667,95 @@ def _ensure_analysis_blocks(ws, required_blocks: int):
 
 
 def fill_analysis_template(ws, lines):
-    meta_geral = extract_meta_geral(lines)
-    valor_referencia = extract_indicador_geral_valor_referencia(lines)
-    sections = extract_meta_especifica_sections(lines)
+    analysis_data = extract_analysis_data(lines)
+    indicador_geral = analysis_data["zero_indicador_geral"]
+    meta_geral = analysis_data["one_meta_geral"]
+    valor_referencia = analysis_data["three_valor_referencia"]
+    sections = analysis_data["sections"]
 
-    if meta_geral:
+    base_a8 = str(ws["A8"].value or "")
+    a8_replaced = replace_placeholder_segment(base_a8, "1*", meta_geral)
+    if a8_replaced != base_a8:
+        ws["A8"] = a8_replaced
+    elif meta_geral:
         ws["A8"] = meta_geral
+
+    base_f10 = str(ws["F10"].value or "")
+    f10_replaced = replace_placeholder_segment(base_f10, "0*", indicador_geral)
+    if f10_replaced != base_f10:
+        ws["F10"] = f10_replaced
+    elif indicador_geral:
+        ws["F10"] = indicador_geral
 
     if not sections:
         return
 
     _ensure_analysis_blocks(ws, len(sections))
 
-    base_e = str(ws["E14"].value or "")
-    base_f = str(ws["F14"].value or "")
-    base_g = str(ws["G14"].value or "")
-    base_h = str(ws["H14"].value or "")
-    base_i = str(ws["I14"].value or "")
-
     for idx, section in enumerate(sections, start=1):
         start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
-        meta_text = section.get("meta_texto", "")
-        meta_text = re.sub(r"^\d+\s*-\s*", "", meta_text).strip()
-        ws[f"A{start_row}"] = f"{idx} - {meta_text}" if meta_text else f"{idx} -"
-        ws[f"E{start_row}"] = _inject_reference_text(base_e, section.get("meta_texto", "") and valor_referencia)
-        ws[f"F{start_row}"] = _inject_descricao_formula(
-            base_f,
-            section.get("descricao_indicador", ""),
-            section.get("formula", ""),
+        meta_text_raw = section.get("meta_texto", "")
+        meta_text = re.sub(r"^\d+\s*-\s*", "", meta_text_raw).strip()
+        two_meta_texto = f"{idx} - {meta_text}" if meta_text else ""
+
+        cell_a = f"A{start_row}"
+        base_a = str(ws[cell_a].value or "")
+        a_replaced = replace_placeholder_segment(base_a, "2*", two_meta_texto)
+        ws[cell_a] = a_replaced if a_replaced != base_a else two_meta_texto
+
+        cell_e = f"E{start_row}"
+        base_e = str(ws[cell_e].value or "")
+        e_replaced = replace_placeholder_segment(base_e, "3*", valor_referencia)
+        if e_replaced == base_e:
+            e_replaced = _inject_reference_text(base_e, valor_referencia)
+        ws[cell_e] = e_replaced
+
+        cell_f = f"F{start_row}"
+        base_f = str(ws[cell_f].value or "")
+        f_replaced = replace_placeholder_segment(base_f, "4*", section.get("descricao_indicador", ""))
+        f_replaced = replace_placeholder_segment(f_replaced, "5*", section.get("formula", ""))
+        if f_replaced == base_f:
+            f_replaced = _inject_descricao_formula(
+                base_f,
+                section.get("descricao_indicador", ""),
+                section.get("formula", ""),
+            )
+        ws[cell_f] = f_replaced
+
+        cell_g = f"G{start_row}"
+        base_g = str(ws[cell_g].value or "")
+        g_replaced = replace_placeholder_segment(base_g, "6*", section.get("meta_pesp", ""))
+        if g_replaced == base_g:
+            g_replaced = _inject_meta_text(
+                base_g,
+                "A Meta informada foi:",
+                section.get("meta_pesp", ""),
+            )
+        ws[cell_g] = g_replaced
+
+        cell_h = f"H{start_row}"
+        base_h = str(ws[cell_h].value or "")
+        h_replaced = replace_placeholder_segment(base_h, "7*", section.get("meta_pnsp", ""))
+        if h_replaced == base_h:
+            h_replaced = _inject_meta_text(
+                base_h,
+                "A Meta informada foi:",
+                section.get("meta_pnsp", ""),
+            )
+        ws[cell_h] = h_replaced
+
+        cell_i = f"I{start_row}"
+        base_i = str(ws[cell_i].value or "")
+        i_replaced = replace_placeholder_segment(
+            base_i, "8*", section.get("carteira_mjsp", "")
         )
-        ws[f"G{start_row}"] = _inject_meta_text(
-            base_g,
-            "A Meta informada foi:",
-            section.get("meta_pesp", ""),
-        )
-        ws[f"H{start_row}"] = _inject_meta_text(
-            base_h,
-            "A Meta informada foi:",
-            section.get("meta_pnsp", ""),
-        )
-        ws[f"I{start_row}"] = _inject_meta_text(
-            base_i,
-            "A política informada foi:",
-            section.get("carteira_mjsp", ""),
-        )
+        if i_replaced == base_i:
+            i_replaced = _inject_meta_text(
+                base_i,
+                "A política informada foi:",
+                section.get("carteira_mjsp", ""),
+            )
+        ws[cell_i] = i_replaced
 
 def fill_worksheet(ws, rows, header_map, start_row=3):
     # Clear previous data (keep headers)

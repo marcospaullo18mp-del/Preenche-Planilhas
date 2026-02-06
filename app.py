@@ -7,7 +7,8 @@ from preencher_planilha import (
     extract_lines_from_pdf_file,
     extract_plan_signature,
     resolve_art_by_plan_rule,
-    extract_meta_especifica_sections,
+    extract_analysis_data,
+    collect_analysis_missing_cells,
     is_analysis_template_file,
     get_analysis_items_header_info,
     parse_items,
@@ -163,7 +164,8 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                         signature["sigla"], signature["ano"]
                     )
                     if analysis_mode:
-                        sections = extract_meta_especifica_sections(lines)
+                        analysis_data = extract_analysis_data(lines)
+                        sections = analysis_data.get("sections", [])
                         header_row, _, items_header_map = get_analysis_items_header_info(
                             TEMPLATE_PATH
                         )
@@ -175,7 +177,7 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                             art_num_preferred=art_num_preferred,
                             source_lines=lines,
                         )
-                        missing_cells = set()
+                        missing_cells = set(collect_analysis_missing_cells(analysis_data))
                         missing_rows = set()
                         start_row = (header_row + 1) if header_row else 3
                         for index, row_data in enumerate(rows):
@@ -192,7 +194,7 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                             "excel_bytes": excel_bytes,
                             "meta_counts": {s["numero_meta"]: 1 for s in sections},
                             "missing_cells": sorted(missing_cells),
-                            "missing_items_count": len(missing_rows),
+                            "missing_items_count": len(missing_cells),
                             "sections_count": len(sections),
                             "items_count": len(parsed_items),
                         }
