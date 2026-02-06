@@ -246,9 +246,9 @@ if result:
     st.subheader("Resumo")
     summary_cols = st.columns(3)
     if mode == "analysis":
-        summary_cols[0].metric("Células em branco", len(missing_cells))
+        summary_cols[0].metric("Metas encontradas", total_metas)
         summary_cols[1].metric("Itens extraídos (PDF)", result.get("items_count", 0))
-        summary_cols[2].metric("Metas encontradas", total_metas)
+        summary_cols[2].metric("Células em branco", len(missing_cells))
     else:
         summary_cols[0].metric("Itens extraídos", total_items)
         summary_cols[1].metric("Metas encontradas", total_metas)
