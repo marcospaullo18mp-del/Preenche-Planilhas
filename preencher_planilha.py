@@ -494,6 +494,18 @@ def replace_placeholder_segment(base_text: str, token: str, value: str) -> str:
     return pattern.sub(value or "", text)
 
 
+def set_cell_font_black(ws, cell_ref: str):
+    cell = ws[cell_ref]
+    font = copy.copy(cell.font)
+    font.color = "FF000000"
+    cell.font = font
+
+
+def set_row_top_fonts_black(ws, row: int, start_col: int = 1, end_col: int = 10):
+    for col in range(start_col, end_col + 1):
+        set_cell_font_black(ws, f"{openpyxl.utils.get_column_letter(col)}{row}")
+
+
 def collect_analysis_missing_cells(analysis_data):
     missing_cells = set()
     if not normalize(analysis_data.get("zero_indicador_geral", "")):
@@ -581,6 +593,22 @@ def _copy_analysis_block(ws, src_start_row: int, dst_start_row: int):
             end_row=rng.max_row + shift,
             end_column=rng.max_col,
         )
+
+
+def _unmerge_analysis_block_region(ws, block_start_row: int):
+    block_end_row = block_start_row + ANALYSIS_BLOCK_HEIGHT - 1
+    to_unmerge = [
+        str(rng)
+        for rng in list(ws.merged_cells.ranges)
+        if (
+            rng.min_row >= block_start_row
+            and rng.max_row <= block_end_row
+            and rng.min_col >= ANALYSIS_BLOCK_START_COL
+            and rng.max_col <= ANALYSIS_BLOCK_END_COL
+        )
+    ]
+    for rng in to_unmerge:
+        ws.unmerge_cells(rng)
 
 
 def _ranges_overlap(a, b) -> bool:
@@ -679,6 +707,7 @@ def fill_analysis_template(ws, lines):
         ws["A8"] = a8_replaced
     elif meta_geral:
         ws["A8"] = meta_geral
+    set_cell_font_black(ws, "A8")
 
     base_f10 = str(ws["F10"].value or "")
     f10_replaced = replace_placeholder_segment(base_f10, "0*", indicador_geral)
@@ -686,11 +715,18 @@ def fill_analysis_template(ws, lines):
         ws["F10"] = f10_replaced
     elif indicador_geral:
         ws["F10"] = indicador_geral
+    set_cell_font_black(ws, "F10")
 
     if not sections:
         return
 
     _ensure_analysis_blocks(ws, len(sections))
+
+    for idx in range(2, len(sections) + 1):
+        start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
+        # Keep static template text/format across all blocks (B..J included).
+        _unmerge_analysis_block_region(ws, start_row)
+        _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, start_row)
 
     for idx, section in enumerate(sections, start=1):
         start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
@@ -756,6 +792,7 @@ def fill_analysis_template(ws, lines):
                 section.get("carteira_mjsp", ""),
             )
         ws[cell_i] = i_replaced
+        set_row_top_fonts_black(ws, start_row, 1, 10)
 
 def fill_worksheet(ws, rows, header_map, start_row=3):
     # Clear previous data (keep headers)
