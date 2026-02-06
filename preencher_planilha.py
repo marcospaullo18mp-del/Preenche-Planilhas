@@ -267,6 +267,10 @@ SECTION_LABEL_PATTERNS = [
     ("meta_pnsp", re.compile(r"^Meta do PNSP:\s*(.*)", re.IGNORECASE)),
     ("meta_pesp", re.compile(r"^Meta do PESP:\s*(.*)", re.IGNORECASE)),
 ]
+META_PESP_CUTOFF_RE = re.compile(
+    r"\b(?:Periodicidade|Fonte(?:/Ano)?|Valor de Refer[eê]ncia(?:/Fonte)?)\s*:",
+    re.IGNORECASE,
+)
 
 
 def extract_meta_geral(lines) -> str:
@@ -331,6 +335,16 @@ def _finalize_meta_section(section):
     return result
 
 
+def _trim_meta_pesp(text: str) -> str:
+    text = normalize(text)
+    if not text:
+        return ""
+    cutoff = META_PESP_CUTOFF_RE.search(text)
+    if cutoff:
+        return normalize(text[:cutoff.start()])
+    return text
+
+
 def extract_meta_especifica_sections(lines):
     sections = []
     current = None
@@ -384,6 +398,8 @@ def extract_meta_especifica_sections(lines):
 
     if current is not None:
         sections.append(_finalize_meta_section(current))
+    for section in sections:
+        section["meta_pesp"] = _trim_meta_pesp(section.get("meta_pesp", ""))
     return sections
 
 
