@@ -7,6 +7,9 @@ from preencher_planilha import (
     extract_lines_from_pdf_file,
     extract_plan_signature,
     resolve_art_by_plan_rule,
+    extract_meta_especifica_sections,
+    is_analysis_template_file,
+    get_analysis_items_header_info,
     parse_items,
     build_rows,
     generate_excel_bytes,
@@ -14,7 +17,7 @@ from preencher_planilha import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMPLATE_PATH = BASE_DIR / "Planilha Base.xlsx"
+TEMPLATE_PATH = BASE_DIR / "Planilha Base de Teste.xlsx"
 LOGO_PATH = BASE_DIR / "Logo.png"
 
 st.set_page_config(page_title="Preenche Planilhas", page_icon="📄", layout="centered")
@@ -145,10 +148,11 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
             with st.status("Processando PDF...", expanded=True) as status:
                 status.write("Lendo PDF")
                 lines = extract_lines_from_pdf_file(uploaded_file)
+                analysis_mode = is_analysis_template_file(TEMPLATE_PATH)
 
                 status.write("Extraindo itens")
                 parsed_items = parse_items(lines)
-                if not parsed_items:
+                if not analysis_mode and not parsed_items:
                     status.update(label="Nenhum item encontrado.", state="error")
                     st.error("Nenhum item encontrado no PDF.")
                     st.session_state.result = None
@@ -158,44 +162,82 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                     art_num_preferred = resolve_art_by_plan_rule(
                         signature["sigla"], signature["ano"]
                     )
-                    _, header_map = get_template_header_info(TEMPLATE_PATH)
-                    rows = build_rows(parsed_items, header_map)
-                    excel_bytes = generate_excel_bytes(
-                        TEMPLATE_PATH,
-                        rows,
-                        header_map,
-                        art_num_preferred=art_num_preferred,
-                    )
+                    if analysis_mode:
+                        sections = extract_meta_especifica_sections(lines)
+                        header_row, _, items_header_map = get_analysis_items_header_info(
+                            TEMPLATE_PATH
+                        )
+                        rows = build_rows(parsed_items, items_header_map)
+                        excel_bytes = generate_excel_bytes(
+                            TEMPLATE_PATH,
+                            rows=rows,
+                            header_map={},
+                            art_num_preferred=art_num_preferred,
+                            source_lines=lines,
+                        )
+                        missing_cells = set()
+                        missing_rows = set()
+                        start_row = (header_row + 1) if header_row else 3
+                        for index, row_data in enumerate(rows):
+                            excel_row = start_row + index
+                            for header, col_index in items_header_map.items():
+                                value = row_data.get(header)
+                                if value is None or value == "":
+                                    cell = f"{get_column_letter(col_index)}{excel_row}"
+                                    missing_cells.add(cell)
+                                    missing_rows.add(excel_row)
+                        st.session_state.result = {
+                            "mode": "analysis",
+                            "rows": rows,
+                            "excel_bytes": excel_bytes,
+                            "meta_counts": {s["numero_meta"]: 1 for s in sections},
+                            "missing_cells": sorted(missing_cells),
+                            "missing_items_count": len(missing_rows),
+                            "sections_count": len(sections),
+                            "items_count": len(parsed_items),
+                        }
+                    else:
+                        _, header_map = get_template_header_info(TEMPLATE_PATH)
+                        rows = build_rows(parsed_items, header_map)
+                        excel_bytes = generate_excel_bytes(
+                            TEMPLATE_PATH,
+                            rows,
+                            header_map,
+                            art_num_preferred=art_num_preferred,
+                            source_lines=lines,
+                        )
 
-                    meta_counts = {}
-                    missing_cells = set()
-                    missing_rows = set()
-                    start_row = 3
-                    for index, row_data in enumerate(rows):
-                        meta = row_data.get("Número da Meta Específica")
-                        item_num = row_data.get("Número do Item")
-                        meta_counts[meta] = meta_counts.get(meta, 0) + 1
-                        excel_row = start_row + index
-                        for header, col_index in header_map.items():
-                            value = row_data.get(header)
-                            if value is None or value == "":
-                                cell = f"{get_column_letter(col_index)}{excel_row}"
-                                missing_cells.add(cell)
-                                missing_rows.add(excel_row)
+                        meta_counts = {}
+                        missing_cells = set()
+                        missing_rows = set()
+                        start_row = 3
+                        for index, row_data in enumerate(rows):
+                            meta = row_data.get("Número da Meta Específica")
+                            item_num = row_data.get("Número do Item")
+                            meta_counts[meta] = meta_counts.get(meta, 0) + 1
+                            excel_row = start_row + index
+                            for header, col_index in header_map.items():
+                                value = row_data.get(header)
+                                if value is None or value == "":
+                                    cell = f"{get_column_letter(col_index)}{excel_row}"
+                                    missing_cells.add(cell)
+                                    missing_rows.add(excel_row)
 
-                    st.session_state.result = {
-                        "rows": rows,
-                        "excel_bytes": excel_bytes,
-                        "meta_counts": meta_counts,
-                        "missing_cells": sorted(missing_cells),
-                        "missing_items_count": len(missing_rows),
-                    }
+                        st.session_state.result = {
+                            "mode": "items",
+                            "rows": rows,
+                            "excel_bytes": excel_bytes,
+                            "meta_counts": meta_counts,
+                            "missing_cells": sorted(missing_cells),
+                            "missing_items_count": len(missing_rows),
+                        }
                     status.update(label="Processamento concluído.", state="complete")
         except Exception as exc:
             st.exception(exc)
 
 result = st.session_state.result
 if result:
+    mode = result.get("mode", "items")
     total_items = len(result["rows"])
     total_metas = len(result["meta_counts"])
     missing_count = result["missing_items_count"]
@@ -203,9 +245,14 @@ if result:
 
     st.subheader("Resumo")
     summary_cols = st.columns(3)
-    summary_cols[0].metric("Itens extraídos", total_items)
-    summary_cols[1].metric("Metas encontradas", total_metas)
-    summary_cols[2].metric("Itens com campos faltantes", missing_count)
+    if mode == "analysis":
+        summary_cols[0].metric("Células em branco", len(missing_cells))
+        summary_cols[1].metric("Itens extraídos (PDF)", result.get("items_count", 0))
+        summary_cols[2].metric("Metas encontradas", total_metas)
+    else:
+        summary_cols[0].metric("Itens extraídos", total_items)
+        summary_cols[1].metric("Metas encontradas", total_metas)
+        summary_cols[2].metric("Itens com campos faltantes", missing_count)
 
     if missing_count:
         st.warning("Alguns itens possuem campos em branco. Veja os detalhes abaixo.")

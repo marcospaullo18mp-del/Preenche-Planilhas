@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import copy
 import re
 from io import BytesIO
 from pathlib import Path
@@ -59,6 +60,12 @@ OUTPUT_HEADERS = [
     "Valor Planejado Total",
     "Status do Item",
 ]
+
+ANALYSIS_TEMPLATE_TITLE = "ANÁLISE DOS ELEMENTOS DO PLANO DE APLICAÇÃO"
+ANALYSIS_BLOCK_START_ROW = 14
+ANALYSIS_BLOCK_HEIGHT = 11
+ANALYSIS_BLOCK_START_COL = 1  # A
+ANALYSIS_BLOCK_END_COL = 10  # J
 
 
 def normalize(text: str) -> str:
@@ -174,6 +181,40 @@ def resolve_art_by_plan_rule(sigla, ano):
     return None
 
 
+def is_analysis_template_sheet(ws) -> bool:
+    title = normalize(str(ws["A2"].value or "")).upper()
+    return ANALYSIS_TEMPLATE_TITLE in title
+
+
+def is_analysis_template_file(template_path: Path) -> bool:
+    wb = openpyxl.load_workbook(template_path)
+    ws = wb.active
+    return is_analysis_template_sheet(ws)
+
+
+def _header_key(header: str) -> str:
+    return ACTION_HEADER_KEY if ACTION_HEADER_PATTERN.match(header) else header
+
+
+def get_template_header_info_by_row(template_path: Path, header_row: int):
+    wb = openpyxl.load_workbook(template_path)
+    ws = wb.active
+    return get_header_info_from_ws(ws, header_row)
+
+
+def get_header_info_from_ws(ws, header_row: int):
+    headers = []
+    header_map = {}
+    for cell in ws[header_row]:
+        if cell.value:
+            header = str(cell.value).strip()
+            headers.append(header)
+            key = _header_key(header)
+            if key not in header_map:
+                header_map[key] = cell.column
+    return headers, header_map
+
+
 def parse_items(lines):
     items = []
     current_meta = None
@@ -213,6 +254,113 @@ def parse_items(lines):
 
     flush()
     return items
+
+
+META_GERAL_LINE_RE = re.compile(r"^Meta Geral$", re.IGNORECASE)
+META_ESPECIFICA_LINE_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
+SECTION_LABEL_PATTERNS = [
+    ("descricao_indicador", re.compile(r"^Descri[cç][aã]o do Indicador:\s*(.*)", re.IGNORECASE)),
+    ("formula", re.compile(r"^F[oó]rmula:\s*(.*)", re.IGNORECASE)),
+    ("carteira_mjsp", re.compile(r"^Carteira de Pol[íi]ticas do MJSP:\s*(.*)", re.IGNORECASE)),
+    ("meta_pnsp", re.compile(r"^Meta do PNSP:\s*(.*)", re.IGNORECASE)),
+    ("meta_pesp", re.compile(r"^Meta do PESP:\s*(.*)", re.IGNORECASE)),
+]
+
+
+def extract_meta_geral(lines) -> str:
+    for idx, line in enumerate(lines):
+        if META_GERAL_LINE_RE.match(line):
+            collected = []
+            for next_line in lines[idx + 1:]:
+                if re.match(r"^(Justificativa|Indicador Geral de Resultado|META ESPEC[ÍI]FICA)", next_line, re.IGNORECASE):
+                    break
+                collected.append(next_line)
+            return normalize(" ".join(collected))
+    return ""
+
+
+def extract_indicador_geral_valor_referencia(lines) -> str:
+    for idx, line in enumerate(lines):
+        marker_idx = line.find("Valor de Referência:")
+        if marker_idx == -1:
+            continue
+        collected = [line[marker_idx:].strip()]
+        for next_line in lines[idx + 1:]:
+            if re.match(r"^(META ESPEC[ÍI]FICA|Descri[cç][aã]o do Indicador:|Itens da Meta|Status:)", next_line, re.IGNORECASE):
+                break
+            collected.append(next_line)
+        return normalize(" ".join(collected))
+    return ""
+
+
+def _finalize_meta_section(section):
+    result = {"numero_meta": section["numero_meta"]}
+    for key in (
+        "meta_texto",
+        "descricao_indicador",
+        "formula",
+        "meta_pesp",
+        "meta_pnsp",
+        "carteira_mjsp",
+    ):
+        result[key] = normalize(" ".join(section.get(key, [])))
+    return result
+
+
+def extract_meta_especifica_sections(lines):
+    sections = []
+    current = None
+    current_field = None
+
+    for line in lines:
+        meta_match = META_ESPECIFICA_LINE_RE.match(line)
+        if meta_match:
+            if current is not None:
+                sections.append(_finalize_meta_section(current))
+            current = {
+                "numero_meta": int(meta_match.group(1)),
+                "meta_texto": [],
+                "descricao_indicador": [],
+                "formula": [],
+                "meta_pesp": [],
+                "meta_pnsp": [],
+                "carteira_mjsp": [],
+            }
+            current_field = "meta_texto"
+            continue
+
+        if current is None:
+            continue
+
+        if re.match(r"^Status:", line, re.IGNORECASE):
+            current_field = None
+            continue
+        if re.match(r"^Itens da Meta$", line, re.IGNORECASE):
+            current_field = None
+            continue
+        if ITEM_RE.match(line):
+            current_field = None
+            continue
+
+        matched_label = False
+        for field_key, pattern in SECTION_LABEL_PATTERNS:
+            match = pattern.match(line)
+            if match:
+                current_field = field_key
+                content = match.group(1).strip()
+                if content:
+                    current[field_key].append(content)
+                matched_label = True
+                break
+        if matched_label:
+            continue
+
+        if current_field:
+            current[current_field].append(line)
+
+    if current is not None:
+        sections.append(_finalize_meta_section(current))
+    return sections
 
 
 def extract_fields(item_lines):
@@ -271,6 +419,49 @@ def extract_fields(item_lines):
     return fields
 
 
+def _inject_reference_text(base_text: str, reference_text: str) -> str:
+    if not reference_text:
+        return base_text
+    marker = "A referência informada foi:"
+    if marker not in base_text:
+        return reference_text
+    return f"{base_text.split(marker, 1)[0]}{marker}\n\n\n\n{reference_text}"
+
+
+def _inject_meta_text(base_text: str, marker: str, value: str) -> str:
+    if not value:
+        return base_text
+    if marker not in base_text:
+        return value
+    before, after = base_text.split(marker, 1)
+    suffix_idx = after.find("Existe aderência")
+    suffix = f"\n\n\n\n{after[suffix_idx:].strip()}" if suffix_idx != -1 else ""
+    return f"{before}{marker}\n\n\n\n{value}{suffix}"
+
+
+def _inject_descricao_formula(base_text: str, descricao: str, formula: str) -> str:
+    if not descricao and not formula:
+        return base_text
+    marker_desc = "Descrição do Indicador:"
+    marker_formula = "Fórmula:"
+    if marker_desc not in base_text or marker_formula not in base_text:
+        parts = []
+        if descricao:
+            parts.append(f"Descrição do Indicador: {descricao}")
+        if formula:
+            parts.append(f"Fórmula: {formula}")
+        return "\n\n".join(parts)
+
+    pre = base_text.split(marker_desc, 1)[0]
+    after_desc = base_text.split(marker_desc, 1)[1]
+    after_formula = after_desc.split(marker_formula, 1)[1] if marker_formula in after_desc else ""
+    suffix_idx = after_formula.find("O indicador")
+    suffix = f"\n\n{after_formula[suffix_idx:].strip()}" if suffix_idx != -1 else ""
+    desc_value = descricao or ""
+    formula_value = formula or ""
+    return f"{pre}{marker_desc}\n{desc_value}\n\n{marker_formula}\n{formula_value}{suffix}"
+
+
 def build_material(bem, descricao, destinacao):
     parts = []
     if bem:
@@ -281,14 +472,193 @@ def build_material(bem, descricao, destinacao):
         parts.append(f"Destinação: {destinacao}")
     return " | ".join(parts)
 
-def fill_worksheet(ws, rows, header_map):
+
+def _count_analysis_blocks(ws) -> int:
+    count = 0
+    for merged in ws.merged_cells.ranges:
+        if (
+            merged.min_col == ANALYSIS_BLOCK_START_COL
+            and merged.max_col == ANALYSIS_BLOCK_START_COL
+            and (merged.max_row - merged.min_row + 1) == ANALYSIS_BLOCK_HEIGHT
+            and merged.min_row >= ANALYSIS_BLOCK_START_ROW
+            and (merged.min_row - ANALYSIS_BLOCK_START_ROW) % ANALYSIS_BLOCK_HEIGHT == 0
+        ):
+            count += 1
+    return max(count, 1)
+
+
+def _copy_analysis_block(ws, src_start_row: int, dst_start_row: int):
+    for row_offset in range(ANALYSIS_BLOCK_HEIGHT):
+        src_row = src_start_row + row_offset
+        dst_row = dst_start_row + row_offset
+        ws.row_dimensions[dst_row].height = ws.row_dimensions[src_row].height
+        for col in range(ANALYSIS_BLOCK_START_COL, ANALYSIS_BLOCK_END_COL + 1):
+            src_cell = ws.cell(src_row, col)
+            dst_cell = ws.cell(dst_row, col)
+            dst_cell.value = src_cell.value
+            dst_cell.font = copy.copy(src_cell.font)
+            dst_cell.fill = copy.copy(src_cell.fill)
+            dst_cell.border = copy.copy(src_cell.border)
+            dst_cell.alignment = copy.copy(src_cell.alignment)
+            dst_cell.number_format = src_cell.number_format
+            dst_cell.protection = copy.copy(src_cell.protection)
+
+    shift = dst_start_row - src_start_row
+    template_merges = [
+        rng
+        for rng in list(ws.merged_cells.ranges)
+        if (
+            rng.min_row >= src_start_row
+            and rng.max_row < src_start_row + ANALYSIS_BLOCK_HEIGHT
+            and rng.min_col >= ANALYSIS_BLOCK_START_COL
+            and rng.max_col <= ANALYSIS_BLOCK_END_COL
+        )
+    ]
+    for rng in template_merges:
+        ws.merge_cells(
+            start_row=rng.min_row + shift,
+            start_column=rng.min_col,
+            end_row=rng.max_row + shift,
+            end_column=rng.max_col,
+        )
+
+
+def _ranges_overlap(a, b) -> bool:
+    return not (
+        a[2] < b[0]
+        or b[2] < a[0]
+        or a[3] < b[1]
+        or b[3] < a[1]
+    )
+
+
+def _insert_rows_preserving_merges(ws, insert_at: int, amount: int):
+    if amount <= 0:
+        return
+    original_ranges = [
+        (rng.min_row, rng.min_col, rng.max_row, rng.max_col)
+        for rng in list(ws.merged_cells.ranges)
+    ]
+    for rng in list(ws.merged_cells.ranges):
+        ws.unmerge_cells(str(rng))
+    ws.insert_rows(insert_at, amount)
+    rebuilt = []
+
+    def add_range(min_row, min_col, max_row, max_col):
+        if min_row > max_row or min_col > max_col:
+            return
+        if min_row == max_row and min_col == max_col:
+            return
+        candidate = (min_row, min_col, max_row, max_col)
+        for existing in rebuilt:
+            if _ranges_overlap(candidate, existing):
+                return
+        rebuilt.append(candidate)
+
+    for min_row, min_col, max_row, max_col in original_ranges:
+        if max_row < insert_at:
+            add_range(min_row, min_col, max_row, max_col)
+            continue
+        if min_row >= insert_at:
+            add_range(
+                min_row + amount,
+                min_col,
+                max_row + amount,
+                max_col,
+            )
+            continue
+        # Split merges that cross the insertion point to avoid invalid overlaps.
+        add_range(min_row, min_col, insert_at - 1, max_col)
+        add_range(insert_at + amount, min_col, max_row + amount, max_col)
+
+    for min_row, min_col, max_row, max_col in rebuilt:
+        ws.merge_cells(
+            start_row=min_row,
+            start_column=min_col,
+            end_row=max_row,
+            end_column=max_col,
+        )
+
+
+def _ensure_analysis_blocks(ws, required_blocks: int):
+    existing_blocks = _count_analysis_blocks(ws)
+    if required_blocks <= existing_blocks:
+        return
+
+    items_title_row = None
+    for row in range(1, ws.max_row + 1):
+        value = normalize(str(ws.cell(row=row, column=1).value or "")).upper()
+        if value == "ITENS DE CONTRATAÇÃO":
+            items_title_row = row
+            break
+
+    extra_blocks = required_blocks - existing_blocks
+    additional_rows_needed = extra_blocks * ANALYSIS_BLOCK_HEIGHT
+    insert_at = ANALYSIS_BLOCK_START_ROW + existing_blocks * ANALYSIS_BLOCK_HEIGHT
+    minimum_gap_rows = 1
+    reusable_gap_rows = 0
+    if items_title_row and items_title_row > insert_at:
+        reusable_gap_rows = max(0, (items_title_row - insert_at) - minimum_gap_rows)
+    rows_to_insert = max(0, additional_rows_needed - reusable_gap_rows)
+    _insert_rows_preserving_merges(ws, insert_at, rows_to_insert)
+    for block_idx in range(existing_blocks + 1, required_blocks + 1):
+        dst_start_row = ANALYSIS_BLOCK_START_ROW + (block_idx - 1) * ANALYSIS_BLOCK_HEIGHT
+        _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, dst_start_row)
+
+
+def fill_analysis_template(ws, lines):
+    meta_geral = extract_meta_geral(lines)
+    valor_referencia = extract_indicador_geral_valor_referencia(lines)
+    sections = extract_meta_especifica_sections(lines)
+
+    if meta_geral:
+        ws["A8"] = meta_geral
+
+    if not sections:
+        return
+
+    _ensure_analysis_blocks(ws, len(sections))
+
+    base_e = str(ws["E14"].value or "")
+    base_f = str(ws["F14"].value or "")
+    base_g = str(ws["G14"].value or "")
+    base_h = str(ws["H14"].value or "")
+    base_i = str(ws["I14"].value or "")
+
+    for idx, section in enumerate(sections, start=1):
+        start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
+        meta_text = section.get("meta_texto", "")
+        meta_text = re.sub(r"^\d+\s*-\s*", "", meta_text).strip()
+        ws[f"A{start_row}"] = f"{idx} - {meta_text}" if meta_text else f"{idx} -"
+        ws[f"E{start_row}"] = _inject_reference_text(base_e, section.get("meta_texto", "") and valor_referencia)
+        ws[f"F{start_row}"] = _inject_descricao_formula(
+            base_f,
+            section.get("descricao_indicador", ""),
+            section.get("formula", ""),
+        )
+        ws[f"G{start_row}"] = _inject_meta_text(
+            base_g,
+            "A Meta informada foi:",
+            section.get("meta_pesp", ""),
+        )
+        ws[f"H{start_row}"] = _inject_meta_text(
+            base_h,
+            "A Meta informada foi:",
+            section.get("meta_pnsp", ""),
+        )
+        ws[f"I{start_row}"] = _inject_meta_text(
+            base_i,
+            "A política informada foi:",
+            section.get("carteira_mjsp", ""),
+        )
+
+def fill_worksheet(ws, rows, header_map, start_row=3):
     # Clear previous data (keep headers)
     max_col = max(header_map.values()) if header_map else ws.max_column
-    for row in ws.iter_rows(min_row=3, max_row=ws.max_row, max_col=max_col):
+    for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row, max_col=max_col):
         for cell in row:
             cell.value = None
 
-    start_row = 3
     for idx, row_data in enumerate(rows, start=start_row):
         for header, col_idx in header_map.items():
             ws.cell(row=idx, column=col_idx, value=row_data.get(header, ""))
@@ -297,26 +667,36 @@ def fill_worksheet(ws, rows, header_map):
 def get_template_header_info(template_path: Path):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    headers = []
-    header_map = {}
-    for cell in ws[2]:
-        if cell.value:
-            header = str(cell.value).strip()
-            headers.append(header)
-            key = ACTION_HEADER_KEY if ACTION_HEADER_PATTERN.match(header) else header
-            if key not in header_map:
-                header_map[key] = cell.column
+    headers, header_map = get_header_info_from_ws(ws, 2)
     if not header_map:
         headers = OUTPUT_HEADERS[:]
         header_map = {}
         for idx, header in enumerate(headers):
-            key = ACTION_HEADER_KEY if ACTION_HEADER_PATTERN.match(header) else header
+            key = _header_key(header)
             if key not in header_map:
                 header_map[key] = idx + 1
     return headers, header_map
 
 
-def update_action_header(ws, rows, header_map, art_num_preferred=None):
+def find_items_table_header_row(ws):
+    for row in range(1, ws.max_row + 1):
+        value = normalize(str(ws.cell(row=row, column=1).value or "")).upper()
+        if value == "ITENS DE CONTRATAÇÃO":
+            return row + 1
+    return None
+
+
+def get_analysis_items_header_info(template_path: Path):
+    wb = openpyxl.load_workbook(template_path)
+    ws = wb.active
+    header_row = find_items_table_header_row(ws)
+    if not header_row:
+        return None, [], {}
+    headers, header_map = get_header_info_from_ws(ws, header_row)
+    return header_row, headers, header_map
+
+
+def update_action_header(ws, rows, header_map, art_num_preferred=None, header_row=2):
     col_idx = header_map.get(ACTION_HEADER_KEY)
     if not col_idx or not rows:
         return
@@ -328,7 +708,7 @@ def update_action_header(ws, rows, header_map, art_num_preferred=None):
     if str(art_num) not in {"6", "7", "8"}:
         return
     ws.cell(
-        row=2,
+        row=header_row,
         column=col_idx,
         value=f"Ação conforme Art. {art_num}º da portaria nº 685",
     )
@@ -340,11 +720,26 @@ def write_excel(
     rows,
     header_map,
     art_num_preferred=None,
+    source_lines=None,
 ):
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
-    fill_worksheet(ws, rows, header_map)
+    if is_analysis_template_sheet(ws):
+        fill_analysis_template(ws, source_lines or [])
+        header_row = find_items_table_header_row(ws)
+        if header_row and rows:
+            _, items_header_map = get_header_info_from_ws(ws, header_row)
+            update_action_header(
+                ws,
+                rows,
+                items_header_map,
+                art_num_preferred=art_num_preferred,
+                header_row=header_row,
+            )
+            fill_worksheet(ws, rows, items_header_map, start_row=header_row + 1)
+    else:
+        update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
+        fill_worksheet(ws, rows, header_map)
     ws.sheet_view.topLeftCell = "A1"
     ws.sheet_view.selection[0].activeCell = "A1"
     ws.sheet_view.selection[0].sqref = "A1"
@@ -352,11 +747,31 @@ def write_excel(
     wb.save(output_path)
 
 
-def generate_excel_bytes(template_path: Path, rows, header_map, art_num_preferred=None) -> bytes:
+def generate_excel_bytes(
+    template_path: Path,
+    rows,
+    header_map,
+    art_num_preferred=None,
+    source_lines=None,
+) -> bytes:
     wb = openpyxl.load_workbook(template_path)
     ws = wb.active
-    update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
-    fill_worksheet(ws, rows, header_map)
+    if is_analysis_template_sheet(ws):
+        fill_analysis_template(ws, source_lines or [])
+        header_row = find_items_table_header_row(ws)
+        if header_row and rows:
+            _, items_header_map = get_header_info_from_ws(ws, header_row)
+            update_action_header(
+                ws,
+                rows,
+                items_header_map,
+                art_num_preferred=art_num_preferred,
+                header_row=header_row,
+            )
+            fill_worksheet(ws, rows, items_header_map, start_row=header_row + 1)
+    else:
+        update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
+        fill_worksheet(ws, rows, header_map)
     ws.sheet_view.topLeftCell = "A1"
     ws.sheet_view.selection[0].activeCell = "A1"
     ws.sheet_view.selection[0].sqref = "A1"
@@ -428,6 +843,7 @@ def main():
         rows,
         header_map,
         art_num_preferred=art_num_preferred,
+        source_lines=lines,
     )
 
     print(f"Itens extraídos: {len(rows)}")
