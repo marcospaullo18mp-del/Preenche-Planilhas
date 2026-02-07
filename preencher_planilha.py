@@ -627,6 +627,24 @@ def _unmerge_analysis_block_region(ws, block_start_row: int):
         ws.unmerge_cells(rng)
 
 
+def _shift_row_dimensions_on_insert(ws, insert_at: int, amount: int):
+    if amount <= 0:
+        return
+    rows_to_shift = sorted(
+        [
+            row_idx
+            for row_idx in ws.row_dimensions
+            if isinstance(row_idx, int) and row_idx >= insert_at
+        ],
+        reverse=True,
+    )
+    for row_idx in rows_to_shift:
+        dim_copy = copy.copy(ws.row_dimensions[row_idx])
+        dim_copy.index = row_idx + amount
+        ws.row_dimensions[row_idx + amount] = dim_copy
+        del ws.row_dimensions[row_idx]
+
+
 def _ranges_overlap(a, b) -> bool:
     return not (
         a[2] < b[0]
@@ -646,6 +664,7 @@ def _insert_rows_preserving_merges(ws, insert_at: int, amount: int):
     for rng in list(ws.merged_cells.ranges):
         ws.unmerge_cells(str(rng))
     ws.insert_rows(insert_at, amount)
+    _shift_row_dimensions_on_insert(ws, insert_at, amount)
     rebuilt = []
 
     def add_range(min_row, min_col, max_row, max_col):
