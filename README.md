@@ -1,6 +1,6 @@
 # Preenche Planilhas
 
-Aplicativo Streamlit que lê um **PDF de Plano de Aplicação** e gera uma **planilha Excel preenchida** automaticamente.
+Aplicativo que lê um **PDF de Plano de Aplicação** e gera uma **planilha Excel preenchida de Itens** automaticamente.
 
 ## Como funciona
 1. Você envia o PDF do plano.
@@ -32,10 +32,3 @@ streamlit run app.py
 ## Observações
 - O template `Planilha Base.xlsx` deve estar na mesma pasta do app.
 - O PDF deve seguir o padrão de “META ESPECÍFICA” e “Item” para extração correta.
-
-## Deploy gratuito (Streamlit Cloud)
-1. Suba este projeto no GitHub.
-2. No Streamlit Community Cloud, crie um novo app apontando para o repositório.
-3. Selecione `app.py` como arquivo principal.
-
-Pronto! O app ficará disponível online.
