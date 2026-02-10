@@ -843,7 +843,29 @@ def fill_worksheet(ws, rows, header_map, start_row=3):
         for cell in row:
             cell.value = None
 
+    style_template_row = start_row if start_row <= ws.max_row else None
+    style_template_has_custom_style = False
+    if style_template_row is not None and header_map:
+        style_template_has_custom_style = any(
+            ws.cell(style_template_row, col_idx).style_id != 0
+            for col_idx in header_map.values()
+        )
+
     for idx, row_data in enumerate(rows, start=start_row):
+        if (
+            style_template_row is not None
+            and style_template_has_custom_style
+            and header_map
+            and idx != style_template_row
+            and all(ws.cell(idx, col_idx).style_id == 0 for col_idx in header_map.values())
+        ):
+            for col_idx in header_map.values():
+                ws.cell(idx, col_idx)._style = copy.copy(
+                    ws.cell(style_template_row, col_idx)._style
+                )
+            template_height = ws.row_dimensions[style_template_row].height
+            if template_height is not None:
+                ws.row_dimensions[idx].height = template_height
         for header, col_idx in header_map.items():
             ws.cell(row=idx, column=col_idx, value=row_data.get(header, ""))
 
