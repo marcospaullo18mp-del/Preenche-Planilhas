@@ -73,6 +73,13 @@ def normalize(text: str) -> str:
     return text
 
 
+def blank_if_dash_only(value: str) -> str:
+    text = normalize(value)
+    if re.fullmatch(r"[-–—]+", text):
+        return ""
+    return text
+
+
 def strip_currency(value: str) -> str:
     value = (value or "").replace("R$", "").strip()
     value = value.replace(".", "")
@@ -281,7 +288,7 @@ def extract_meta_geral(lines) -> str:
                 if re.match(r"^(Justificativa|Indicador Geral de Resultado|META ESPEC[ÍI]FICA)", next_line, re.IGNORECASE):
                     break
                 collected.append(next_line)
-            return normalize(" ".join(collected))
+            return blank_if_dash_only(" ".join(collected))
     return ""
 
 
@@ -294,7 +301,7 @@ def extract_indicador_geral_completo(lines) -> str:
             if re.match(r"^(Meta Geral|META ESPEC[ÍI]FICA)", next_line, re.IGNORECASE):
                 break
             collected.append(next_line)
-        return normalize(" ".join(collected))
+        return blank_if_dash_only(" ".join(collected))
     return ""
 
 
@@ -308,7 +315,7 @@ def extract_indicador_geral_valor_referencia(lines) -> str:
             if re.match(r"^(META ESPEC[ÍI]FICA|Descri[cç][aã]o do Indicador:|Itens da Meta|Status:)", next_line, re.IGNORECASE):
                 break
             collected.append(next_line)
-        return normalize(" ".join(collected))
+        return blank_if_dash_only(" ".join(collected))
     return ""
 
 
@@ -331,18 +338,18 @@ def _finalize_meta_section(section):
         "meta_pnsp",
         "carteira_mjsp",
     ):
-        result[key] = normalize(" ".join(section.get(key, [])))
+        result[key] = blank_if_dash_only(" ".join(section.get(key, [])))
     return result
 
 
 def _trim_meta_pesp(text: str) -> str:
-    text = normalize(text)
+    text = blank_if_dash_only(text)
     if not text:
         return ""
     cutoff = META_PESP_CUTOFF_RE.search(text)
     if cutoff:
-        return normalize(text[:cutoff.start()])
-    return text
+        return blank_if_dash_only(text[:cutoff.start()])
+    return blank_if_dash_only(text)
 
 
 def extract_meta_especifica_sections(lines):
@@ -454,7 +461,7 @@ def extract_fields(item_lines):
             fields[current_field].append(line)
 
     for key in fields:
-        fields[key] = normalize(" ".join(fields[key]))
+        fields[key] = blank_if_dash_only(" ".join(fields[key]))
 
     return fields
 
@@ -524,28 +531,28 @@ def set_row_top_fonts_black(ws, row: int, start_col: int = 1, end_col: int = 10)
 
 def collect_analysis_missing_cells(analysis_data):
     missing_cells = set()
-    if not normalize(analysis_data.get("zero_indicador_geral", "")):
+    if not blank_if_dash_only(analysis_data.get("zero_indicador_geral", "")):
         missing_cells.add("F10")
-    if not normalize(analysis_data.get("one_meta_geral", "")):
+    if not blank_if_dash_only(analysis_data.get("one_meta_geral", "")):
         missing_cells.add("A8")
 
     sections = analysis_data.get("sections") or []
-    reference = normalize(analysis_data.get("three_valor_referencia", ""))
+    reference = blank_if_dash_only(analysis_data.get("three_valor_referencia", ""))
     for idx, section in enumerate(sections, start=1):
         start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
-        if not normalize(section.get("meta_texto", "")):
+        if not blank_if_dash_only(section.get("meta_texto", "")):
             missing_cells.add(f"A{start_row}")
         if not reference:
             missing_cells.add(f"E{start_row}")
-        if not normalize(section.get("descricao_indicador", "")) or not normalize(
+        if not blank_if_dash_only(section.get("descricao_indicador", "")) or not blank_if_dash_only(
             section.get("formula", "")
         ):
             missing_cells.add(f"F{start_row}")
-        if not normalize(section.get("meta_pesp", "")):
+        if not blank_if_dash_only(section.get("meta_pesp", "")):
             missing_cells.add(f"G{start_row}")
-        if not normalize(section.get("meta_pnsp", "")):
+        if not blank_if_dash_only(section.get("meta_pnsp", "")):
             missing_cells.add(f"H{start_row}")
-        if not normalize(section.get("carteira_mjsp", "")):
+        if not blank_if_dash_only(section.get("carteira_mjsp", "")):
             missing_cells.add(f"I{start_row}")
     return sorted(missing_cells)
 

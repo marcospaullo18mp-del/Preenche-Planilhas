@@ -1,7 +1,9 @@
 import base64
+from io import BytesIO
 import streamlit as st
 from pathlib import Path
 from openpyxl.utils import get_column_letter
+import openpyxl
 
 from preencher_planilha import (
     extract_lines_from_pdf_file,
@@ -11,6 +13,7 @@ from preencher_planilha import (
     collect_analysis_missing_cells,
     is_analysis_template_file,
     get_analysis_items_header_info,
+    find_items_table_header_row,
     parse_items,
     build_rows,
     generate_excel_bytes,
@@ -179,7 +182,14 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                         )
                         missing_cells = set(collect_analysis_missing_cells(analysis_data))
                         missing_rows = set()
-                        start_row = (header_row + 1) if header_row else 3
+                        generated_wb = openpyxl.load_workbook(BytesIO(excel_bytes))
+                        generated_ws = generated_wb.active
+                        generated_header_row = find_items_table_header_row(generated_ws)
+                        start_row = (
+                            generated_header_row + 1
+                            if generated_header_row
+                            else (header_row + 1 if header_row else 3)
+                        )
                         for index, row_data in enumerate(rows):
                             excel_row = start_row + index
                             for header, col_index in items_header_map.items():
