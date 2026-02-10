@@ -1,13 +1,18 @@
 .venv/
 __pycache__/
 .DS_Store
+*.pdf
+*.PDF
 Itens NT - preenchido.xlsx
-Planilha Base - preenchido.xlsx
+Planilha Base - preenchido.xlssx
 Planos de Aplicação.pdf
 Acre - 2025.pdf
 teste.pdf
 PDF 2.xlsx
+~$*.xlsx
 ~$Itens NT.xlsx
 ~$Planilha Base.xlsx
 
-Planos de Aplicação RMV SE.pdf
+~$Planos de Aplicação RMV SE.pdf
+~$Planos de Aplicação RMV SE (1).pdf
+~$Planos de Aplica* RMV SE (1).pdf
