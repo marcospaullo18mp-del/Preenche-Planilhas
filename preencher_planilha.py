@@ -65,7 +65,7 @@ ANALYSIS_TEMPLATE_TITLE = "ANÁLISE DOS ELEMENTOS DO PLANO DE APLICAÇÃO"
 ANALYSIS_BLOCK_START_ROW = 14
 ANALYSIS_BLOCK_HEIGHT = 11
 ANALYSIS_BLOCK_START_COL = 1  # A
-ANALYSIS_BLOCK_END_COL = 10  # J
+ANALYSIS_BLOCK_END_COL = 12  # L
 
 
 def normalize(text: str) -> str:
@@ -524,7 +524,7 @@ def set_cell_font_black(ws, cell_ref: str):
     cell.font = font
 
 
-def set_row_top_fonts_black(ws, row: int, start_col: int = 1, end_col: int = 10):
+def set_row_top_fonts_black(ws, row: int, start_col: int = 1, end_col: int = 12):
     for col in range(start_col, end_col + 1):
         set_cell_font_black(ws, f"{openpyxl.utils.get_column_letter(col)}{row}")
 
@@ -766,7 +766,7 @@ def fill_analysis_template(ws, lines):
 
     for idx in range(2, len(sections) + 1):
         start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
-        # Keep static template text/format across all blocks (B..J included).
+        # Keep static template text/format across all blocks (B..L included).
         _unmerge_analysis_block_region(ws, start_row)
         _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, start_row)
 
@@ -834,7 +834,7 @@ def fill_analysis_template(ws, lines):
                 section.get("carteira_mjsp", ""),
             )
         ws[cell_i] = i_replaced
-        set_row_top_fonts_black(ws, start_row, 1, 10)
+        set_row_top_fonts_black(ws, start_row, 1, 12)
 
 def fill_worksheet(ws, rows, header_map, start_row=3):
     # Clear previous data (keep headers)
