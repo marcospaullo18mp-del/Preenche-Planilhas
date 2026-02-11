@@ -990,6 +990,10 @@ def generate_excel_bytes(
 def build_rows(parsed_items, header_map):
     has_descricao = "Descrição" in header_map
     has_destinacao = "Destinação" in header_map
+    has_quantidade_unidade = "Quantidade/Unidade" in header_map
+    has_valor_status = "Valor/Status" in header_map
+    has_unidade_col = "Unidade de Medida" in header_map
+    has_status_col = "Status do Item" in header_map
     rows = []
     for item in parsed_items:
         fields = extract_fields(item["lines"])
@@ -999,6 +1003,24 @@ def build_rows(parsed_items, header_map):
             material = build_material(fields["bem"], fields["descricao"], fields["destinacao"])
         valor_total = format_currency(fields["valor_total"])
         quantidade = parse_int(fields["quantidade"])
+        unidade = fields["unidade"]
+        status_item = item.get("status") or "Planejado"
+        quantidade_unidade = ""
+        if has_quantidade_unidade and not has_unidade_col:
+            if quantidade != "" and unidade:
+                quantidade_unidade = f"{quantidade} {unidade}"
+            elif quantidade != "":
+                quantidade_unidade = str(quantidade)
+            elif unidade:
+                quantidade_unidade = unidade
+        valor_status = ""
+        if has_valor_status and not has_status_col:
+            if valor_total and status_item:
+                valor_status = f"{valor_total} | {status_item}"
+            elif valor_total:
+                valor_status = valor_total
+            elif status_item:
+                valor_status = status_item
         row = {
             "Número da Meta Específica": item["meta"],
             "Número do Item": item["item"],
@@ -1011,8 +1033,10 @@ def build_rows(parsed_items, header_map):
             "Natureza da Despesa": fields["natureza"],
             "Quantidade Planejada": quantidade,
             "Unidade de Medida": fields["unidade"],
+            "Quantidade/Unidade": quantidade_unidade,
             "Valor Planejado Total": valor_total,
-            "Status do Item": item.get("status") or "Planejado",
+            "Status do Item": status_item,
+            "Valor/Status": valor_status,
         }
         rows.append(row)
     return rows
