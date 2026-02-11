@@ -21,7 +21,7 @@ from preencher_planilha import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMPLATE_PATH = BASE_DIR / "Planilha Base de Teste.xlsx"
+TEMPLATE_PATH = BASE_DIR / "Planilha Base.xlsx"
 LOGO_PATH = BASE_DIR / "Logo.png"
 
 st.set_page_config(page_title="Preenche Planilhas", page_icon="📄", layout="centered")
