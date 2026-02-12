@@ -273,8 +273,6 @@ SECTION_LABEL_PATTERNS = [
     ("carteira_mjsp", re.compile(r"^Carteira de Pol[íi]ticas do MJSP:\s*(.*)", re.IGNORECASE)),
     ("meta_pnsp", re.compile(r"^Meta do PNSP:\s*(.*)", re.IGNORECASE)),
     ("meta_pesp", re.compile(r"^Meta do PESP:\s*(.*)", re.IGNORECASE)),
-    ("periodicidade", re.compile(r"^Periodicidade:\s*(.*)", re.IGNORECASE)),
-    ("fonte_ano", re.compile(r"^Fonte(?:/Ano)?:\s*(.*)", re.IGNORECASE)),
 ]
 META_PESP_CUTOFF_RE = re.compile(
     r"\b(?:Periodicidade|Fonte(?:/Ano)?|Valor de Refer[eê]ncia(?:/Fonte)?)\s*:",
@@ -339,8 +337,6 @@ def _finalize_meta_section(section):
         "meta_pesp",
         "meta_pnsp",
         "carteira_mjsp",
-        "periodicidade",
-        "fonte_ano",
     ):
         result[key] = blank_if_dash_only(" ".join(section.get(key, [])))
     return result
@@ -374,8 +370,6 @@ def extract_meta_especifica_sections(lines):
                 "meta_pesp": [],
                 "meta_pnsp": [],
                 "carteira_mjsp": [],
-                "periodicidade": [],
-                "fonte_ano": [],
             }
             current_field = "meta_texto"
             continue
@@ -850,20 +844,26 @@ def fill_worksheet(ws, rows, header_map, start_row=3):
             cell.value = None
 
     style_template_row = start_row if start_row <= ws.max_row else None
-    template_height = (
-        ws.row_dimensions[style_template_row].height
-        if style_template_row is not None
-        else None
-    )
+    style_template_has_custom_style = False
+    if style_template_row is not None and header_map:
+        style_template_has_custom_style = any(
+            ws.cell(style_template_row, col_idx).style_id != 0
+            for col_idx in header_map.values()
+        )
 
     for idx, row_data in enumerate(rows, start=start_row):
-        if style_template_row is not None and idx != style_template_row:
-            # Keep every generated item row with the exact same layout as the base row
-            # (e.g. A105:L105), even when rows already exist with another style.
-            for col_idx in range(1, max_col + 1):
+        if (
+            style_template_row is not None
+            and style_template_has_custom_style
+            and header_map
+            and idx != style_template_row
+            and all(ws.cell(idx, col_idx).style_id == 0 for col_idx in header_map.values())
+        ):
+            for col_idx in header_map.values():
                 ws.cell(idx, col_idx)._style = copy.copy(
                     ws.cell(style_template_row, col_idx)._style
                 )
+            template_height = ws.row_dimensions[style_template_row].height
             if template_height is not None:
                 ws.row_dimensions[idx].height = template_height
         for header, col_idx in header_map.items():
