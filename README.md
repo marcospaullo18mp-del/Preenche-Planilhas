@@ -1,6 +1,8 @@
 # Preenche Planilhas
 
 Aplicativo que lê um **PDF de Plano de Aplicação** e gera uma **planilha Excel preenchida de Itens** automaticamente.
+<img width="624" height="860" alt="image" src="https://github.com/user-attachments/assets/b6d29437-27dd-4762-8923-61b279c62caf" />
+
 
 ## Como funciona
 1. Você envia o PDF do plano.
