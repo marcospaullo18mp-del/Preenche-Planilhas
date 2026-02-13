@@ -273,7 +273,20 @@ SECTION_LABEL_PATTERNS = [
     ("carteira_mjsp", re.compile(r"^Carteira de Pol[íi]ticas do MJSP:\s*(.*)", re.IGNORECASE)),
     ("meta_pnsp", re.compile(r"^Meta do PNSP:\s*(.*)", re.IGNORECASE)),
     ("meta_pesp", re.compile(r"^Meta do PESP:\s*(.*)", re.IGNORECASE)),
+    ("periodicidade", re.compile(r"^Periodicidade:\s*(.*)", re.IGNORECASE)),
+    ("fonte_ano", re.compile(r"^Fonte(?:/Ano)?:\s*(.*)", re.IGNORECASE)),
 ]
+TECHNICAL_FIELD_FLAGS = (
+    "saw_status",
+    "saw_descricao_indicador",
+    "saw_formula",
+    "saw_carteira_mjsp",
+)
+FIELD_TO_FLAG = {
+    "descricao_indicador": "saw_descricao_indicador",
+    "formula": "saw_formula",
+    "carteira_mjsp": "saw_carteira_mjsp",
+}
 META_PESP_CUTOFF_RE = re.compile(
     r"\b(?:Periodicidade|Fonte(?:/Ano)?|Valor de Refer[eê]ncia(?:/Fonte)?)\s*:",
     re.IGNORECASE,
@@ -337,9 +350,28 @@ def _finalize_meta_section(section):
         "meta_pesp",
         "meta_pnsp",
         "carteira_mjsp",
+        "periodicidade",
+        "fonte_ano",
     ):
         result[key] = blank_if_dash_only(" ".join(section.get(key, [])))
     return result
+
+
+def _is_technical_meta_section(section) -> bool:
+    return all(section.get(flag, False) for flag in TECHNICAL_FIELD_FLAGS)
+
+
+def _dedupe_sections_keep_last(sections):
+    deduped_reversed = []
+    seen = set()
+    for section in reversed(sections):
+        meta_num = section.get("numero_meta")
+        if meta_num in seen:
+            continue
+        seen.add(meta_num)
+        deduped_reversed.append(section)
+    deduped_reversed.reverse()
+    return deduped_reversed
 
 
 def _trim_meta_pesp(text: str) -> str:
@@ -361,7 +393,7 @@ def extract_meta_especifica_sections(lines):
         meta_match = META_ESPECIFICA_LINE_RE.match(line)
         if meta_match:
             if current is not None:
-                sections.append(_finalize_meta_section(current))
+                sections.append(current)
             current = {
                 "numero_meta": int(meta_match.group(1)),
                 "meta_texto": [],
@@ -370,6 +402,12 @@ def extract_meta_especifica_sections(lines):
                 "meta_pesp": [],
                 "meta_pnsp": [],
                 "carteira_mjsp": [],
+                "periodicidade": [],
+                "fonte_ano": [],
+                "saw_status": False,
+                "saw_descricao_indicador": False,
+                "saw_formula": False,
+                "saw_carteira_mjsp": False,
             }
             current_field = "meta_texto"
             continue
@@ -378,6 +416,7 @@ def extract_meta_especifica_sections(lines):
             continue
 
         if re.match(r"^Status:", line, re.IGNORECASE):
+            current["saw_status"] = True
             current_field = None
             continue
         if re.match(r"^Itens da Meta$", line, re.IGNORECASE):
@@ -392,8 +431,26 @@ def extract_meta_especifica_sections(lines):
             match = pattern.match(line)
             if match:
                 current_field = field_key
+                flag_key = FIELD_TO_FLAG.get(field_key)
+                if flag_key:
+                    current[flag_key] = True
                 content = match.group(1).strip()
                 if content:
+                    if field_key == "periodicidade":
+                        fonte_inline = re.search(
+                            r"\|\s*Fonte(?:/Ano)?:\s*(.*)$",
+                            content,
+                            re.IGNORECASE,
+                        )
+                        if fonte_inline:
+                            periodicidade_value = content[:fonte_inline.start()].strip()
+                            fonte_value = fonte_inline.group(1).strip()
+                            if periodicidade_value:
+                                current[field_key].append(periodicidade_value)
+                            if fonte_value:
+                                current["fonte_ano"].append(fonte_value)
+                            matched_label = True
+                            break
                     current[field_key].append(content)
                 matched_label = True
                 break
@@ -404,10 +461,18 @@ def extract_meta_especifica_sections(lines):
             current[current_field].append(line)
 
     if current is not None:
-        sections.append(_finalize_meta_section(current))
-    for section in sections:
+        sections.append(current)
+
+    technical_sections = [
+        _finalize_meta_section(section)
+        for section in sections
+        if _is_technical_meta_section(section)
+    ]
+    technical_sections = _dedupe_sections_keep_last(technical_sections)
+
+    for section in technical_sections:
         section["meta_pesp"] = _trim_meta_pesp(section.get("meta_pesp", ""))
-    return sections
+    return technical_sections
 
 
 def extract_fields(item_lines):
