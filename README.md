@@ -34,3 +34,10 @@ streamlit run app.py
 ## Observações
 - O template `Planilha Base.xlsx` deve estar na mesma pasta do app.
 - O PDF deve seguir o padrão de “META ESPECÍFICA” e “Item” para extração correta.
+
+## Colaboração
+- Este repositório pode ser público para consulta, download e fork.
+- Contribuições de terceiros devem ser feitas por fork + Pull Request.
+
+## Licença
+Este projeto está licenciado sob a licença MIT. Veja `LICENSE`.
