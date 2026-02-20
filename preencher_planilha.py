@@ -374,6 +374,17 @@ def _dedupe_sections_keep_last(sections):
     return deduped_reversed
 
 
+def _merge_sections_prefer_technical(all_sections, technical_sections):
+    technical_by_meta = {
+        section.get("numero_meta"): section for section in technical_sections
+    }
+    merged = []
+    for section in all_sections:
+        meta_num = section.get("numero_meta")
+        merged.append(technical_by_meta.get(meta_num, section))
+    return merged
+
+
 def _trim_meta_pesp(text: str) -> str:
     text = blank_if_dash_only(text)
     if not text:
@@ -463,6 +474,9 @@ def extract_meta_especifica_sections(lines):
     if current is not None:
         sections.append(current)
 
+    finalized_sections = [_finalize_meta_section(section) for section in sections]
+    finalized_sections = _dedupe_sections_keep_last(finalized_sections)
+
     technical_sections = [
         _finalize_meta_section(section)
         for section in sections
@@ -470,9 +484,13 @@ def extract_meta_especifica_sections(lines):
     ]
     technical_sections = _dedupe_sections_keep_last(technical_sections)
 
-    for section in technical_sections:
+    merged_sections = _merge_sections_prefer_technical(
+        finalized_sections, technical_sections
+    )
+
+    for section in merged_sections:
         section["meta_pesp"] = _trim_meta_pesp(section.get("meta_pesp", ""))
-    return technical_sections
+    return merged_sections
 
 
 def extract_fields(item_lines):
