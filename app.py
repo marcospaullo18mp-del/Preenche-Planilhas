@@ -83,6 +83,15 @@ st.markdown(
       border-color: #1b5e38;
       color: #ffffff;
     }
+    div[data-testid="stDownloadButton"] button:active,
+    div[data-testid="stDownloadButton"] button:focus,
+    div[data-testid="stDownloadButton"] button:focus-visible {
+      background: #1b5e38;
+      border-color: #1b5e38;
+      color: #ffffff;
+      box-shadow: none;
+      outline: none;
+    }
     .blank-cells {
       border-collapse: collapse;
       width: auto;
