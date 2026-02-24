@@ -94,7 +94,9 @@ def resolve_template_path():
         return LOCAL_TEMPLATE_PATH, None
     return None, "Planilha modelo não encontrada no servidor."
 
-st.set_page_config(page_title="Preenche Planilhas", page_icon="📄", layout="centered")
+st.set_page_config(
+    page_title="Gerador de Planilha de Itens - FAF", page_icon="📄", layout="centered"
+)
 
 st.markdown(
     """
