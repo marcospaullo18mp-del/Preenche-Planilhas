@@ -1,7 +1,12 @@
 import base64
+import hashlib
+import json
 from io import BytesIO
-import streamlit as st
 from pathlib import Path
+import urllib.parse
+import urllib.request
+
+import streamlit as st
 from openpyxl.utils import get_column_letter
 import openpyxl
 
@@ -21,8 +26,73 @@ from preencher_planilha import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMPLATE_PATH = BASE_DIR / "Planilha Base.xlsx"
+LOCAL_TEMPLATE_PATH = BASE_DIR / "Planilha Base.xlsx"
 LOGO_PATH = BASE_DIR / "Logo.png"
+TEMPLATE_CACHE_DIR = Path("/tmp/preenche_planilhas")
+
+
+def _get_secret(name: str, default=None):
+    try:
+        if name in st.secrets:
+            return st.secrets[name]
+    except Exception:
+        return default
+    return default
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def _download_template_bytes_from_github(
+    repo: str, template_path: str, ref: str, token: str
+) -> bytes:
+    encoded_path = urllib.parse.quote(template_path, safe="/")
+    encoded_ref = urllib.parse.quote(ref, safe="")
+    url = f"https://api.github.com/repos/{repo}/contents/{encoded_path}?ref={encoded_ref}"
+    request = urllib.request.Request(url)
+    request.add_header("Accept", "application/vnd.github+json")
+    request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("X-GitHub-Api-Version", "2022-11-28")
+
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    content = payload.get("content")
+    if not content:
+        raise RuntimeError("Resposta do GitHub sem conteúdo da planilha.")
+    return base64.b64decode(content)
+
+
+def resolve_template_path():
+    repo = _get_secret("TEMPLATE_GITHUB_REPO") or _get_secret("TEMPLATE_REPO")
+    template_path = _get_secret("TEMPLATE_GITHUB_PATH") or _get_secret("TEMPLATE_PATH")
+    ref = _get_secret("TEMPLATE_GITHUB_REF") or _get_secret("TEMPLATE_REF") or "main"
+    token = _get_secret("GITHUB_TOKEN") or _get_secret("TEMPLATE_GITHUB_TOKEN")
+
+    if repo or template_path:
+        if not repo:
+            return None, "Defina TEMPLATE_GITHUB_REPO no st.secrets."
+        if not token:
+            return None, "Defina GITHUB_TOKEN (ou TEMPLATE_GITHUB_TOKEN) no st.secrets."
+        resolved_template_path = template_path or "Planilha Base.xlsx"
+        try:
+            template_bytes = _download_template_bytes_from_github(
+                repo=repo,
+                template_path=resolved_template_path,
+                ref=ref,
+                token=token,
+            )
+            TEMPLATE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cache_key = hashlib.sha256(
+                f"{repo}|{resolved_template_path}|{ref}".encode("utf-8")
+            ).hexdigest()[:12]
+            cached_template = TEMPLATE_CACHE_DIR / f"template_{cache_key}.xlsx"
+            cached_template.write_bytes(template_bytes)
+            return cached_template, None
+        except Exception as exc:
+            return None, f"Falha ao baixar Planilha Base do GitHub privado: {exc}"
+
+    if LOCAL_TEMPLATE_PATH.exists():
+        return LOCAL_TEMPLATE_PATH, None
+    return None, "Planilha modelo não encontrada no servidor."
 
 st.set_page_config(page_title="Preenche Planilhas", page_icon="📄", layout="centered")
 
@@ -154,14 +224,17 @@ if "result" not in st.session_state:
     st.session_state.result = None
 
 if st.button("Processar", type="primary", disabled=uploaded_file is None):
-    if not TEMPLATE_PATH.exists():
+    template_source, template_error = resolve_template_path()
+    if template_error:
+        st.error(template_error)
+    elif not template_source or not template_source.exists():
         st.error("Planilha modelo não encontrada no servidor.")
     else:
         try:
             with st.status("Processando PDF...", expanded=True) as status:
                 status.write("Lendo PDF")
                 lines = extract_lines_from_pdf_file(uploaded_file)
-                analysis_mode = is_analysis_template_file(TEMPLATE_PATH)
+                analysis_mode = is_analysis_template_file(template_source)
 
                 status.write("Extraindo itens")
                 parsed_items = parse_items(lines)
@@ -179,11 +252,11 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                         analysis_data = extract_analysis_data(lines)
                         sections = analysis_data.get("sections", [])
                         header_row, _, items_header_map = get_analysis_items_header_info(
-                            TEMPLATE_PATH
+                            template_source
                         )
                         rows = build_rows(parsed_items, items_header_map)
                         excel_bytes = generate_excel_bytes(
-                            TEMPLATE_PATH,
+                            template_source,
                             rows=rows,
                             header_map={},
                             art_num_preferred=art_num_preferred,
@@ -218,10 +291,10 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                             "items_count": len(parsed_items),
                         }
                     else:
-                        _, header_map = get_template_header_info(TEMPLATE_PATH)
+                        _, header_map = get_template_header_info(template_source)
                         rows = build_rows(parsed_items, header_map)
                         excel_bytes = generate_excel_bytes(
-                            TEMPLATE_PATH,
+                            template_source,
                             rows,
                             header_map,
                             art_num_preferred=art_num_preferred,
