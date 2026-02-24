@@ -198,7 +198,7 @@ st.markdown(
     f"""
     <div class="header">
       {logo_html}
-      <h1 class="header-title">Gerador de Planilha de Itens - MJSP</h1>
+      <h1 class="header-title">Gerador de Planilha de Itens - FAF</h1>
     </div>
     """,
     unsafe_allow_html=True,
