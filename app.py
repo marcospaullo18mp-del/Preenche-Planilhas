@@ -10,7 +10,7 @@ import streamlit as st
 from openpyxl.utils import get_column_letter
 import openpyxl
 
-from preencher_planilha import (
+from planilha_engine import (
     extract_lines_from_pdf_file,
     extract_plan_signature,
     resolve_art_by_plan_rule,
