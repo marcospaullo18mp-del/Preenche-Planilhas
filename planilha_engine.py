@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pdfplumber
 import openpyxl
-from openpyxl.cell.cell import MergedCell
 
 META_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
 ITEM_RE = re.compile(
@@ -810,13 +809,6 @@ def _ensure_analysis_blocks(ws, required_blocks: int):
     additional_rows_needed = extra_blocks * ANALYSIS_BLOCK_HEIGHT
     insert_at = ANALYSIS_BLOCK_START_ROW + existing_blocks * ANALYSIS_BLOCK_HEIGHT
     minimum_gap_rows = 1
-
-    if items_title_row and items_title_row <= insert_at:
-        # Keep the items section below the analysis block area before adding new blocks.
-        rows_to_shift_items = (insert_at - items_title_row) + minimum_gap_rows
-        _insert_rows_preserving_merges(ws, items_title_row, rows_to_shift_items)
-        items_title_row += rows_to_shift_items
-
     reusable_gap_rows = 0
     if items_title_row and items_title_row > insert_at:
         reusable_gap_rows = max(0, (items_title_row - insert_at) - minimum_gap_rows)
@@ -932,8 +924,6 @@ def fill_worksheet(ws, rows, header_map, start_row=3):
     max_col = max(header_map.values()) if header_map else ws.max_column
     for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row, max_col=max_col):
         for cell in row:
-            if isinstance(cell, MergedCell):
-                continue
             cell.value = None
 
     style_template_row = start_row if start_row <= ws.max_row else None
@@ -960,10 +950,7 @@ def fill_worksheet(ws, rows, header_map, start_row=3):
             if template_height is not None:
                 ws.row_dimensions[idx].height = template_height
         for header, col_idx in header_map.items():
-            cell = ws.cell(row=idx, column=col_idx)
-            if isinstance(cell, MergedCell):
-                continue
-            cell.value = row_data.get(header, "")
+            ws.cell(row=idx, column=col_idx, value=row_data.get(header, ""))
 
 
 def get_template_header_info(template_path: Path):
