@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pdfplumber
 import openpyxl
+from openpyxl.cell.cell import MergedCell
 
 META_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
 ITEM_RE = re.compile(
@@ -66,6 +67,17 @@ ANALYSIS_BLOCK_START_ROW = 14
 ANALYSIS_BLOCK_HEIGHT = 11
 ANALYSIS_BLOCK_START_COL = 1  # A
 ANALYSIS_BLOCK_END_COL = 12  # L
+ANALYSIS_BLOCK_MERGE_LAYOUT = (
+    (1, 1),   # A
+    (2, 2),   # B
+    (3, 3),   # C
+    (4, 4),   # D
+    (5, 5),   # E
+    (6, 6),   # F
+    (7, 7),   # G
+    (8, 8),   # H
+    (9, 12),  # I..L
+)
 
 
 def normalize(text: str) -> str:
@@ -717,6 +729,17 @@ def _unmerge_analysis_block_region(ws, block_start_row: int):
         ws.unmerge_cells(rng)
 
 
+def _apply_analysis_block_merges(ws, block_start_row: int):
+    block_end_row = block_start_row + ANALYSIS_BLOCK_HEIGHT - 1
+    for start_col, end_col in ANALYSIS_BLOCK_MERGE_LAYOUT:
+        ws.merge_cells(
+            start_row=block_start_row,
+            start_column=start_col,
+            end_row=block_end_row,
+            end_column=end_col,
+        )
+
+
 def _shift_row_dimensions_on_insert(ws, insert_at: int, amount: int):
     if amount <= 0:
         return
@@ -809,6 +832,13 @@ def _ensure_analysis_blocks(ws, required_blocks: int):
     additional_rows_needed = extra_blocks * ANALYSIS_BLOCK_HEIGHT
     insert_at = ANALYSIS_BLOCK_START_ROW + existing_blocks * ANALYSIS_BLOCK_HEIGHT
     minimum_gap_rows = 1
+
+    if items_title_row and items_title_row <= insert_at:
+        # Keep items table below the dynamic analysis block area.
+        rows_to_shift_items = (insert_at - items_title_row) + minimum_gap_rows
+        _insert_rows_preserving_merges(ws, items_title_row, rows_to_shift_items)
+        items_title_row += rows_to_shift_items
+
     reusable_gap_rows = 0
     if items_title_row and items_title_row > insert_at:
         reusable_gap_rows = max(0, (items_title_row - insert_at) - minimum_gap_rows)
@@ -847,11 +877,15 @@ def fill_analysis_template(ws, lines):
 
     _ensure_analysis_blocks(ws, len(sections))
 
+    _unmerge_analysis_block_region(ws, ANALYSIS_BLOCK_START_ROW)
+    _apply_analysis_block_merges(ws, ANALYSIS_BLOCK_START_ROW)
+
     for idx in range(2, len(sections) + 1):
         start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
         # Keep static template text/format across all blocks (B..L included).
         _unmerge_analysis_block_region(ws, start_row)
         _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, start_row)
+        _apply_analysis_block_merges(ws, start_row)
 
     for idx, section in enumerate(sections, start=1):
         start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
@@ -924,6 +958,8 @@ def fill_worksheet(ws, rows, header_map, start_row=3):
     max_col = max(header_map.values()) if header_map else ws.max_column
     for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row, max_col=max_col):
         for cell in row:
+            if isinstance(cell, MergedCell):
+                continue
             cell.value = None
 
     style_template_row = start_row if start_row <= ws.max_row else None
@@ -950,7 +986,10 @@ def fill_worksheet(ws, rows, header_map, start_row=3):
             if template_height is not None:
                 ws.row_dimensions[idx].height = template_height
         for header, col_idx in header_map.items():
-            ws.cell(row=idx, column=col_idx, value=row_data.get(header, ""))
+            cell = ws.cell(row=idx, column=col_idx)
+            if isinstance(cell, MergedCell):
+                continue
+            cell.value = row_data.get(header, "")
 
 
 def get_template_header_info(template_path: Path):
