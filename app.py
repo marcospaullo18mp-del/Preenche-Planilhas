@@ -69,8 +69,12 @@ def resolve_template_path():
 
     if repo or template_path:
         if not repo:
+            if LOCAL_TEMPLATE_PATH.exists():
+                return LOCAL_TEMPLATE_PATH, None
             return None, "Defina TEMPLATE_GITHUB_REPO no st.secrets."
         if not token:
+            if LOCAL_TEMPLATE_PATH.exists():
+                return LOCAL_TEMPLATE_PATH, None
             return None, "Defina GITHUB_TOKEN (ou TEMPLATE_GITHUB_TOKEN) no st.secrets."
         resolved_template_path = template_path or "Planilha Base(atualizada).xlsx"
         try:
@@ -88,6 +92,8 @@ def resolve_template_path():
             cached_template.write_bytes(template_bytes)
             return cached_template, None
         except Exception as exc:
+            if LOCAL_TEMPLATE_PATH.exists():
+                return LOCAL_TEMPLATE_PATH, None
             return None, f"Falha ao baixar Planilha Base do GitHub privado: {exc}"
 
     if LOCAL_TEMPLATE_PATH.exists():
