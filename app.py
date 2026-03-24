@@ -122,8 +122,11 @@ st.markdown(
 
 logo_b64 = ""
 if LOGO_PATH.exists():
-    logo_bytes = LOGO_PATH.read_bytes()
-    logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
+    try:
+        logo_bytes = LOGO_PATH.read_bytes()
+        logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
+    except Exception:
+        logo_b64 = ""
 
 logo_html = ""
 if logo_b64:
