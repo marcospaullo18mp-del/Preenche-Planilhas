@@ -26,7 +26,7 @@ from planilha_engine import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-LOCAL_TEMPLATE_PATH = BASE_DIR / "Planilha Base(atualizada).xlsx"
+LOCAL_TEMPLATE_PATH = BASE_DIR / "Planilha Base.xlsx"
 LOGO_PATH = BASE_DIR / "Logo.png"
 TEMPLATE_CACHE_DIR = Path("/tmp/preenche_planilhas")
 
@@ -72,7 +72,7 @@ def resolve_template_path():
             return None, "Defina TEMPLATE_GITHUB_REPO no st.secrets."
         if not token:
             return None, "Defina GITHUB_TOKEN (ou TEMPLATE_GITHUB_TOKEN) no st.secrets."
-        resolved_template_path = template_path or "Planilha Base(atualizada).xlsx"
+        resolved_template_path = template_path or "Planilha Base.xlsx"
         try:
             template_bytes = _download_template_bytes_from_github(
                 repo=repo,
