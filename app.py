@@ -176,6 +176,15 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
             with st.status("Processando PDF...", expanded=True) as status:
                 status.write("Lendo PDF")
                 lines = extract_lines_from_pdf_file(uploaded_file)
+                if not lines:
+                    status.update(label="PDF sem texto selecionável.", state="error")
+                    st.error(
+                        "Não foi possível extrair texto do PDF enviado. "
+                        "Esse arquivo parece ser escaneado (imagem). "
+                        "Envie um PDF com texto selecionável."
+                    )
+                    st.session_state.result = None
+                    st.stop()
                 analysis_mode = is_analysis_template_file(template_source)
 
                 status.write("Extraindo itens")
