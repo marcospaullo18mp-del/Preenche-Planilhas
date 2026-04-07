@@ -67,17 +67,6 @@ ANALYSIS_BLOCK_START_ROW = 14
 ANALYSIS_BLOCK_HEIGHT = 11
 ANALYSIS_BLOCK_START_COL = 1  # A
 ANALYSIS_BLOCK_END_COL = 12  # L
-ANALYSIS_BLOCK_MERGE_LAYOUT = (
-    (1, 1),   # A
-    (2, 2),   # B
-    (3, 3),   # C
-    (4, 4),   # D
-    (5, 5),   # E
-    (6, 6),   # F
-    (7, 7),   # G
-    (8, 8),   # H
-    (9, 12),  # I..L
-)
 
 
 def normalize(text: str) -> str:
@@ -712,21 +701,46 @@ def build_material(bem, descricao, destinacao):
 
 
 def _count_analysis_blocks(ws) -> int:
-    count = 0
+    block_height = _infer_analysis_block_height(ws)
+    items_title_row = _find_items_title_row(ws)
+    if items_title_row and items_title_row > ANALYSIS_BLOCK_START_ROW and block_height > 0:
+        return max(1, (items_title_row - ANALYSIS_BLOCK_START_ROW) // block_height)
+    return 1
+
+
+def _find_items_title_row(ws):
+    for row in range(1, ws.max_row + 1):
+        value = normalize(str(ws.cell(row=row, column=1).value or "")).upper()
+        if value == "ITENS DE CONTRATAÇÃO":
+            return row
+    return None
+
+
+def _infer_analysis_block_height(ws) -> int:
+    items_title_row = _find_items_title_row(ws)
+
+    first_block_merge_height = None
     for merged in ws.merged_cells.ranges:
         if (
             merged.min_col == ANALYSIS_BLOCK_START_COL
             and merged.max_col == ANALYSIS_BLOCK_START_COL
-            and (merged.max_row - merged.min_row + 1) == ANALYSIS_BLOCK_HEIGHT
-            and merged.min_row >= ANALYSIS_BLOCK_START_ROW
-            and (merged.min_row - ANALYSIS_BLOCK_START_ROW) % ANALYSIS_BLOCK_HEIGHT == 0
+            and merged.min_row == ANALYSIS_BLOCK_START_ROW
         ):
-            count += 1
-    return max(count, 1)
+            first_block_merge_height = merged.max_row - merged.min_row + 1
+            break
+    if first_block_merge_height and first_block_merge_height > 0:
+        return first_block_merge_height
+
+    if items_title_row and items_title_row > ANALYSIS_BLOCK_START_ROW:
+        compact_height = items_title_row - ANALYSIS_BLOCK_START_ROW
+        if 1 <= compact_height <= ANALYSIS_BLOCK_HEIGHT:
+            return compact_height
+
+    return ANALYSIS_BLOCK_HEIGHT
 
 
-def _copy_analysis_block(ws, src_start_row: int, dst_start_row: int):
-    for row_offset in range(ANALYSIS_BLOCK_HEIGHT):
+def _copy_analysis_block(ws, src_start_row: int, dst_start_row: int, block_height: int):
+    for row_offset in range(block_height):
         src_row = src_start_row + row_offset
         dst_row = dst_start_row + row_offset
         ws.row_dimensions[dst_row].height = ws.row_dimensions[src_row].height
@@ -743,14 +757,14 @@ def _copy_analysis_block(ws, src_start_row: int, dst_start_row: int):
 
     shift = dst_start_row - src_start_row
     template_merges = [
-        rng
-        for rng in list(ws.merged_cells.ranges)
-        if (
-            rng.min_row >= src_start_row
-            and rng.max_row < src_start_row + ANALYSIS_BLOCK_HEIGHT
-            and rng.min_col >= ANALYSIS_BLOCK_START_COL
-            and rng.max_col <= ANALYSIS_BLOCK_END_COL
-        )
+            rng
+            for rng in list(ws.merged_cells.ranges)
+            if (
+                rng.min_row >= src_start_row
+                and rng.max_row < src_start_row + block_height
+                and rng.min_col >= ANALYSIS_BLOCK_START_COL
+                and rng.max_col <= ANALYSIS_BLOCK_END_COL
+            )
     ]
     for rng in template_merges:
         ws.merge_cells(
@@ -761,8 +775,8 @@ def _copy_analysis_block(ws, src_start_row: int, dst_start_row: int):
         )
 
 
-def _unmerge_analysis_block_region(ws, block_start_row: int):
-    block_end_row = block_start_row + ANALYSIS_BLOCK_HEIGHT - 1
+def _unmerge_analysis_block_region(ws, block_start_row: int, block_height: int):
+    block_end_row = block_start_row + block_height - 1
     to_unmerge = [
         str(rng)
         for rng in list(ws.merged_cells.ranges)
@@ -775,17 +789,6 @@ def _unmerge_analysis_block_region(ws, block_start_row: int):
     ]
     for rng in to_unmerge:
         ws.unmerge_cells(rng)
-
-
-def _apply_analysis_block_merges(ws, block_start_row: int):
-    block_end_row = block_start_row + ANALYSIS_BLOCK_HEIGHT - 1
-    for start_col, end_col in ANALYSIS_BLOCK_MERGE_LAYOUT:
-        ws.merge_cells(
-            start_row=block_start_row,
-            start_column=start_col,
-            end_row=block_end_row,
-            end_column=end_col,
-        )
 
 
 def _shift_row_dimensions_on_insert(ws, insert_at: int, amount: int):
@@ -865,20 +868,15 @@ def _insert_rows_preserving_merges(ws, insert_at: int, amount: int):
 
 
 def _ensure_analysis_blocks(ws, required_blocks: int):
+    block_height = _infer_analysis_block_height(ws)
     existing_blocks = _count_analysis_blocks(ws)
     if required_blocks <= existing_blocks:
         return
-
-    items_title_row = None
-    for row in range(1, ws.max_row + 1):
-        value = normalize(str(ws.cell(row=row, column=1).value or "")).upper()
-        if value == "ITENS DE CONTRATAÇÃO":
-            items_title_row = row
-            break
+    items_title_row = _find_items_title_row(ws)
 
     extra_blocks = required_blocks - existing_blocks
-    additional_rows_needed = extra_blocks * ANALYSIS_BLOCK_HEIGHT
-    insert_at = ANALYSIS_BLOCK_START_ROW + existing_blocks * ANALYSIS_BLOCK_HEIGHT
+    additional_rows_needed = extra_blocks * block_height
+    insert_at = ANALYSIS_BLOCK_START_ROW + existing_blocks * block_height
     minimum_gap_rows = 1
 
     if items_title_row and items_title_row <= insert_at:
@@ -893,8 +891,9 @@ def _ensure_analysis_blocks(ws, required_blocks: int):
     rows_to_insert = max(0, additional_rows_needed - reusable_gap_rows)
     _insert_rows_preserving_merges(ws, insert_at, rows_to_insert)
     for block_idx in range(existing_blocks + 1, required_blocks + 1):
-        dst_start_row = ANALYSIS_BLOCK_START_ROW + (block_idx - 1) * ANALYSIS_BLOCK_HEIGHT
-        _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, dst_start_row)
+        dst_start_row = ANALYSIS_BLOCK_START_ROW + (block_idx - 1) * block_height
+        _unmerge_analysis_block_region(ws, dst_start_row, block_height)
+        _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, dst_start_row, block_height)
 
 
 def fill_analysis_template(ws, lines):
@@ -923,20 +922,16 @@ def fill_analysis_template(ws, lines):
     if not sections:
         return
 
+    block_height = _infer_analysis_block_height(ws)
     _ensure_analysis_blocks(ws, len(sections))
 
-    _unmerge_analysis_block_region(ws, ANALYSIS_BLOCK_START_ROW)
-    _apply_analysis_block_merges(ws, ANALYSIS_BLOCK_START_ROW)
-
     for idx in range(2, len(sections) + 1):
-        start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
-        # Keep static template text/format across all blocks (B..L included).
-        _unmerge_analysis_block_region(ws, start_row)
-        _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, start_row)
-        _apply_analysis_block_merges(ws, start_row)
+        start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * block_height
+        _unmerge_analysis_block_region(ws, start_row, block_height)
+        _copy_analysis_block(ws, ANALYSIS_BLOCK_START_ROW, start_row, block_height)
 
     for idx, section in enumerate(sections, start=1):
-        start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * ANALYSIS_BLOCK_HEIGHT
+        start_row = ANALYSIS_BLOCK_START_ROW + (idx - 1) * block_height
         meta_text_raw = section.get("meta_texto", "")
         meta_text = re.sub(r"^\d+\s*-\s*", "", meta_text_raw).strip()
         two_meta_texto = f"{idx} - {meta_text}" if meta_text else ""
