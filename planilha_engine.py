@@ -15,6 +15,7 @@ ITEM_RE = re.compile(
 )
 ACTION_HEADER_KEY = "acao_art"
 ACTION_HEADER_NUM_KEY = "acao_art_num"
+REQUIRED_TEMPLATE_NAME = "Planilha Base(atualizada).xlsx"
 ACTION_HEADER_PATTERN = re.compile(
     r"^Ação conforme Art\.\s*\d+º\s+da portaria nº 685$",
     re.IGNORECASE,
@@ -1210,13 +1211,23 @@ def build_rows(parsed_items, header_map):
 def main():
     parser = argparse.ArgumentParser(description="Preenche planilha a partir do PDF.")
     parser.add_argument("--pdf", default="Planos de Aplicação.pdf", help="PDF de entrada")
-    parser.add_argument("--xlsx", default="Itens NT.xlsx", help="Planilha modelo")
+    parser.add_argument(
+        "--xlsx",
+        default=REQUIRED_TEMPLATE_NAME,
+        help=f"Template obrigatório ({REQUIRED_TEMPLATE_NAME})",
+    )
     parser.add_argument("--output", default="Itens NT - preenchido.xlsx", help="Planilha de saída")
     args = parser.parse_args()
 
     pdf_path = Path(args.pdf)
     xlsx_path = Path(args.xlsx)
     output_path = Path(args.output)
+
+    if xlsx_path.name != REQUIRED_TEMPLATE_NAME:
+        raise SystemExit(
+            "Template não permitido. Use apenas: "
+            f"{REQUIRED_TEMPLATE_NAME}"
+        )
 
     if not pdf_path.exists():
         raise SystemExit(f"PDF não encontrado: {pdf_path}")

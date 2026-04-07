@@ -24,12 +24,13 @@ from planilha_engine import (
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_TEMPLATE_PATH = BASE_DIR / "Planilha Base(atualizada).xlsx"
 LOGO_PATH = BASE_DIR / "Logo.png"
+REQUIRED_TEMPLATE_NAME = "Planilha Base(atualizada).xlsx"
 
 
 def resolve_template_path():
     if LOCAL_TEMPLATE_PATH.exists():
         return LOCAL_TEMPLATE_PATH, None
-    return None, "Planilha modelo não encontrada no servidor."
+    return None, f"Template obrigatório não encontrado: {REQUIRED_TEMPLATE_NAME}."
 
 st.set_page_config(
     page_title="Gerador de Planilha de Itens - FAF", page_icon="📄", layout="centered"
@@ -170,7 +171,7 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
     if template_error:
         st.error(template_error)
     elif not template_source or not template_source.exists():
-        st.error("Planilha modelo não encontrada no servidor.")
+        st.error(f"Template obrigatório não encontrado: {REQUIRED_TEMPLATE_NAME}.")
     else:
         try:
             with st.status("Processando PDF...", expanded=True) as status:
