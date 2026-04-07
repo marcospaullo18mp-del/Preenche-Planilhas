@@ -276,7 +276,14 @@ def parse_items(lines):
 
 
 META_GERAL_LINE_RE = re.compile(r"^Meta Geral$", re.IGNORECASE)
-INDICADOR_GERAL_LINE_RE = re.compile(r"^Indicador Geral de Resultado$", re.IGNORECASE)
+INDICADOR_GERAL_LINE_RE = re.compile(
+    r"^Indicador Geral de Resultado\b",
+    re.IGNORECASE,
+)
+INDICADOR_GERAL_MARKER_RE = re.compile(
+    r"Indicador Geral(?:\s+de(?:\s+Resultado)?)?\s*:?",
+    re.IGNORECASE,
+)
 VALOR_REFERENCIA_RE = re.compile(r"valor de refer[eê]ncia\s*:", re.IGNORECASE)
 META_ESPECIFICA_LINE_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
 SECTION_LABEL_PATTERNS = [
@@ -286,7 +293,13 @@ SECTION_LABEL_PATTERNS = [
     ("meta_pnsp", re.compile(r"^Meta do PNSP:\s*(.*)", re.IGNORECASE)),
     ("meta_pesp", re.compile(r"^Meta do PESP:\s*(.*)", re.IGNORECASE)),
     ("periodicidade", re.compile(r"^Periodicidade:\s*(.*)", re.IGNORECASE)),
-    ("fonte_ano", re.compile(r"^Fonte(?:/Ano)?:\s*(.*)", re.IGNORECASE)),
+    (
+        "fonte_ano",
+        re.compile(
+            r"^(?:Fonte(?:/Ano)?|Valor de Refer[eê]ncia(?:/Fonte)?)\s*:\s*(.*)",
+            re.IGNORECASE,
+        ),
+    ),
 ]
 TECHNICAL_FIELD_FLAGS = (
     "saw_status",
@@ -303,6 +316,10 @@ META_PESP_CUTOFF_RE = re.compile(
     r"\b(?:Periodicidade|Fonte(?:/Ano)?|Valor de Refer[eê]ncia(?:/Fonte)?)\s*:",
     re.IGNORECASE,
 )
+PERIODICIDADE_FONTE_INLINE_RE = re.compile(
+    r"\|\s*(?:Fonte(?:/Ano)?|Valor de Refer[eê]ncia(?:/Fonte)?)\s*:\s*(.*)$",
+    re.IGNORECASE,
+)
 
 
 def extract_meta_geral(lines) -> str:
@@ -317,16 +334,51 @@ def extract_meta_geral(lines) -> str:
     return ""
 
 
+def _extract_text_after_marker(line: str, marker_pattern) -> str:
+    match = marker_pattern.search(line or "")
+    if not match:
+        return ""
+    return blank_if_dash_only((line or "")[match.end():].lstrip(" :;-"))
+
+
 def extract_indicador_geral_completo(lines) -> str:
     for idx, line in enumerate(lines):
-        if not INDICADOR_GERAL_LINE_RE.match(line):
+        has_indicator_marker = bool(INDICADOR_GERAL_MARKER_RE.search(line or ""))
+        is_indicator_header = bool(INDICADOR_GERAL_LINE_RE.match(line or ""))
+        is_meta_inline_indicator = bool(
+            re.match(r"^Meta Geral\s*:", line or "", re.IGNORECASE)
+            and has_indicator_marker
+        )
+        if not (is_indicator_header or is_meta_inline_indicator):
             continue
         collected = []
+        inline = _extract_text_after_marker(line, INDICADOR_GERAL_MARKER_RE)
+        if inline:
+            collected.append(inline)
         for next_line in lines[idx + 1:]:
-            if re.match(r"^(Meta Geral|META ESPEC[ÍI]FICA)", next_line, re.IGNORECASE):
+            if re.match(r"^META ESPEC[ÍI]FICA", next_line, re.IGNORECASE):
+                break
+            if re.match(r"^Meta Geral", next_line, re.IGNORECASE):
+                inline_meta = _extract_text_after_marker(
+                    next_line, INDICADOR_GERAL_MARKER_RE
+                )
+                if inline_meta:
+                    collected.append(inline_meta)
+                    continue
+                break
+            if INDICADOR_GERAL_MARKER_RE.search(next_line):
+                inline_next = _extract_text_after_marker(
+                    next_line, INDICADOR_GERAL_MARKER_RE
+                )
+                if inline_next:
+                    collected.append(inline_next)
+                continue
+            if re.match(r"^(Itens da Meta|Status:)", next_line, re.IGNORECASE):
                 break
             collected.append(next_line)
-        return blank_if_dash_only(" ".join(collected))
+        indicador = blank_if_dash_only(" ".join(collected))
+        if indicador:
+            return indicador
     return ""
 
 
@@ -460,11 +512,7 @@ def extract_meta_especifica_sections(lines):
                 content = match.group(1).strip()
                 if content:
                     if field_key == "periodicidade":
-                        fonte_inline = re.search(
-                            r"\|\s*Fonte(?:/Ano)?:\s*(.*)$",
-                            content,
-                            re.IGNORECASE,
-                        )
+                        fonte_inline = PERIODICIDADE_FONTE_INLINE_RE.search(content)
                         if fonte_inline:
                             periodicidade_value = content[:fonte_inline.start()].strip()
                             fonte_value = fonte_inline.group(1).strip()
