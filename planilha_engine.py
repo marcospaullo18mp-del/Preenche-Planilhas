@@ -702,8 +702,17 @@ def build_material(bem, descricao, destinacao):
 
 
 def _count_analysis_blocks(ws) -> int:
-    block_height = _infer_analysis_block_height(ws)
     items_title_row = _find_items_title_row(ws)
+    if items_title_row and items_title_row > ANALYSIS_BLOCK_START_ROW:
+        populated_rows = 0
+        for row in range(ANALYSIS_BLOCK_START_ROW, items_title_row):
+            value = ws.cell(row=row, column=ANALYSIS_BLOCK_START_COL).value
+            if normalize(str(value or "")):
+                populated_rows += 1
+        if populated_rows > 0:
+            return populated_rows
+
+    block_height = _infer_analysis_block_height(ws)
     if items_title_row and items_title_row > ANALYSIS_BLOCK_START_ROW and block_height > 0:
         return max(1, (items_title_row - ANALYSIS_BLOCK_START_ROW) // block_height)
     return 1
@@ -723,12 +732,15 @@ def _infer_analysis_block_height(ws) -> int:
     first_block_merge_height = None
     for merged in ws.merged_cells.ranges:
         if (
-            merged.min_col == ANALYSIS_BLOCK_START_COL
-            and merged.max_col == ANALYSIS_BLOCK_START_COL
-            and merged.min_row == ANALYSIS_BLOCK_START_ROW
+            merged.min_row == ANALYSIS_BLOCK_START_ROW
+            and merged.min_col >= ANALYSIS_BLOCK_START_COL
+            and merged.max_col <= ANALYSIS_BLOCK_END_COL
         ):
-            first_block_merge_height = merged.max_row - merged.min_row + 1
-            break
+            merge_height = merged.max_row - merged.min_row + 1
+            if merge_height > 0:
+                first_block_merge_height = max(
+                    first_block_merge_height or 0, merge_height
+                )
     if first_block_merge_height and first_block_merge_height > 0:
         return first_block_merge_height
 

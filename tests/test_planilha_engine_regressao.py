@@ -1,8 +1,12 @@
 import unittest
+from pathlib import Path
+
+import openpyxl
 
 from planilha_engine import (
     extract_indicador_geral_completo,
     extract_meta_especifica_sections,
+    fill_analysis_template,
 )
 
 
@@ -69,6 +73,60 @@ class TestRegressaoVariacoesPDF(unittest.TestCase):
             sections[0]["fonte_ano"],
             "Estupro: 1.956/SINESP/SENASP/2025",
         )
+
+    def test_bloco_analise_compacto_nao_deve_inserir_linhas_vazias_entre_metas(self):
+        wb = openpyxl.load_workbook(
+            Path(__file__).resolve().parents[1] / "Planilha Base(atualizada).xlsx"
+        )
+        ws = wb.active
+
+        lines = [
+            "Meta Geral",
+            "Texto da meta geral",
+            "Indicador Geral de Resultado",
+            "Texto do indicador geral",
+            "META ESPECÍFICA 1",
+            "Meta 1",
+            "Status: Planejado",
+            "Descrição do Indicador: d1",
+            "Fórmula: f1",
+            "Carteira de Políticas do MJSP: c1",
+            "Meta do PNSP: p1",
+            "Meta do PESP: e1",
+            "META ESPECÍFICA 2",
+            "Meta 2",
+            "Status: Planejado",
+            "Descrição do Indicador: d2",
+            "Fórmula: f2",
+            "Carteira de Políticas do MJSP: c2",
+            "Meta do PNSP: p2",
+            "Meta do PESP: e2",
+            "META ESPECÍFICA 3",
+            "Meta 3",
+            "Status: Planejado",
+            "Descrição do Indicador: d3",
+            "Fórmula: f3",
+            "Carteira de Políticas do MJSP: c3",
+            "Meta do PNSP: p3",
+            "Meta do PESP: e3",
+            "META ESPECÍFICA 4",
+            "Meta 4",
+            "Status: Planejado",
+            "Descrição do Indicador: d4",
+            "Fórmula: f4",
+            "Carteira de Políticas do MJSP: c4",
+            "Meta do PNSP: p4",
+            "Meta do PESP: e4",
+        ]
+
+        fill_analysis_template(ws, lines)
+
+        self.assertTrue(str(ws["A14"].value).startswith("1 - "))
+        self.assertTrue(str(ws["A15"].value).startswith("2 - "))
+        self.assertTrue(str(ws["A16"].value).startswith("3 - "))
+        self.assertTrue(str(ws["A17"].value).startswith("4 - "))
+        self.assertEqual(ws["A18"].value, None)
+        self.assertEqual(ws["A19"].value, "ITENS DE CONTRATAÇÃO")
 
 
 if __name__ == "__main__":
