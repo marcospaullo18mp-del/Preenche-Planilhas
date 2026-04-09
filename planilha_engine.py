@@ -1241,8 +1241,18 @@ def main():
 
     signature = extract_plan_signature(lines)
     art_num_preferred = resolve_art_by_plan_rule(signature["sigla"], signature["ano"])
-    _, header_map = get_template_header_info(xlsx_path)
-    rows = build_rows(parsed_items, header_map)
+    analysis_mode = is_analysis_template_file(xlsx_path)
+    if analysis_mode:
+        _, _, items_header_map = get_analysis_items_header_info(xlsx_path)
+        if not items_header_map:
+            raise SystemExit(
+                "Não foi possível localizar a tabela de itens no template de análise."
+            )
+        rows = build_rows(parsed_items, items_header_map)
+        header_map = {}
+    else:
+        _, header_map = get_template_header_info(xlsx_path)
+        rows = build_rows(parsed_items, header_map)
     write_excel(
         xlsx_path,
         output_path,

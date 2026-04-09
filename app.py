@@ -24,6 +24,7 @@ from planilha_engine import (
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_TEMPLATE_PATH = BASE_DIR / "Planilha Base(atualizada).xlsx"
 LOGO_PATH = BASE_DIR / "Logo.png"
+FAVICON_PATH = BASE_DIR / "favicon_mj.png"
 REQUIRED_TEMPLATE_NAME = "Planilha Base(atualizada).xlsx"
 
 
@@ -32,8 +33,9 @@ def resolve_template_path():
         return LOCAL_TEMPLATE_PATH, None
     return None, f"Template obrigatório não encontrado: {REQUIRED_TEMPLATE_NAME}."
 
+page_icon = str(FAVICON_PATH) if FAVICON_PATH.exists() else "📄"
 st.set_page_config(
-    page_title="Gerador de Planilha de Itens - FAF", page_icon="📄", layout="centered"
+    page_title="Gerador de Planilha de Itens - FAF", page_icon=page_icon, layout="centered"
 )
 
 st.markdown(
