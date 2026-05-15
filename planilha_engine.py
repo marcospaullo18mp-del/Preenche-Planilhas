@@ -24,7 +24,7 @@ PLAN_SIGNATURE_RE = re.compile(
     r"\b([A-Z]{2})\s*-\s*([A-Z0-9]+)\s*-\s*(20\d{2})\b"
 )
 ART_PATTERN = re.compile(
-    r"^Art\.?\s*(6|7|8)\s*º?\s*(?:\((\d+)\))?\s*:\s*(.*)",
+    r"^Art\.?\s*(\d+)\s*º?\s*(?:\((\d+)\))?\s*:\s*(.*)",
     re.IGNORECASE,
 )
 ACTION_PATTERN = re.compile(r"^A[cç][aã]o:\s*(.*)", re.IGNORECASE)

@@ -4,6 +4,7 @@ from pathlib import Path
 import openpyxl
 
 from planilha_engine import (
+    extract_fields,
     extract_indicador_geral_completo,
     extract_meta_especifica_sections,
     fill_analysis_template,
@@ -11,6 +12,18 @@ from planilha_engine import (
 
 
 class TestRegressaoVariacoesPDF(unittest.TestCase):
+    def test_extract_fields_deve_capturar_artigo_fora_de_6_7_8(self):
+        lines = [
+            "Art. 5º (439): RMV | IV - Fortalecimento da capacidade de investigação",
+            "Bem/Serviço: Exemplo",
+        ]
+        fields = extract_fields(lines)
+        self.assertEqual(fields["art_num"], "5")
+        self.assertEqual(
+            fields["art"],
+            "RMV | IV - Fortalecimento da capacidade de investigação",
+        )
+
     def test_indicador_formato_antigo_em_linhas_separadas(self):
         lines = [
             "Alguma linha",
