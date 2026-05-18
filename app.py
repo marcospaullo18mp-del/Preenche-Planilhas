@@ -6,21 +6,40 @@ import streamlit as st
 from openpyxl.utils import get_column_letter
 import openpyxl
 
-from planilha_engine import (
-    extract_lines_from_pdf_file,
-    extract_plan_signature,
-    resolve_art_by_plan_rule,
-    resolve_action_header_title_by_plan,
-    extract_analysis_data,
-    collect_analysis_missing_cells,
-    is_analysis_template_file,
-    get_analysis_items_header_info,
-    find_items_table_header_row,
-    parse_items,
-    build_rows,
-    generate_excel_bytes,
-    get_template_header_info,
-)
+try:
+    from planilha_engine import (
+        extract_lines_from_pdf_file,
+        extract_plan_signature,
+        resolve_art_by_plan_rule,
+        resolve_action_header_title_by_plan,
+        extract_analysis_data,
+        collect_analysis_missing_cells,
+        is_analysis_template_file,
+        get_analysis_items_header_info,
+        find_items_table_header_row,
+        parse_items,
+        build_rows,
+        generate_excel_bytes,
+        get_template_header_info,
+    )
+except ImportError:
+    from planilha_engine import (
+        extract_lines_from_pdf_file,
+        extract_plan_signature,
+        resolve_art_by_plan_rule,
+        extract_analysis_data,
+        collect_analysis_missing_cells,
+        is_analysis_template_file,
+        get_analysis_items_header_info,
+        find_items_table_header_row,
+        parse_items,
+        build_rows,
+        generate_excel_bytes,
+        get_template_header_info,
+    )
+
+    def resolve_action_header_title_by_plan(sigla, ano):
+        return None
 
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_TEMPLATE_PATH = BASE_DIR / "Planilha Base(atualizada).xlsx"
