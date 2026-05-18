@@ -4,14 +4,54 @@ from pathlib import Path
 import openpyxl
 
 from planilha_engine import (
+    ACTION_HEADER_KEY,
+    ACTION_HEADER_NUM_KEY,
     extract_fields,
     extract_indicador_geral_completo,
     extract_meta_especifica_sections,
     fill_analysis_template,
+    resolve_action_header_title_by_plan,
+    update_action_header,
 )
 
 
 class TestRegressaoVariacoesPDF(unittest.TestCase):
+    def test_resolve_action_header_title_by_plan_para_2023_2024(self):
+        self.assertEqual(
+            resolve_action_header_title_by_plan("RMV", 2023),
+            "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
+        )
+        self.assertEqual(
+            resolve_action_header_title_by_plan("EVM", 2024),
+            "Ação conforme Art. 6º da portaria nº 439 ou Art. 7º da portaria nº 685",
+        )
+        self.assertEqual(
+            resolve_action_header_title_by_plan("MQVPSP", 2024),
+            "Ação conforme Art. 7º da portaria nº 439 ou Art. 8º da portaria nº 685",
+        )
+        self.assertIsNone(resolve_action_header_title_by_plan("RMV", 2025))
+
+    def test_update_action_header_deve_priorizar_titulo_preferido(self):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws["C2"] = "Ação conforme Art. 7º da portaria nº 685"
+        rows = [{ACTION_HEADER_NUM_KEY: "6"}]
+        update_action_header(
+            ws,
+            rows,
+            {ACTION_HEADER_KEY: 3},
+            art_num_preferred=None,
+            action_header_title_preferred=(
+                "Ação conforme Art. 5º da portaria nº 439 "
+                "ou Art. 6º da portaria nº 685"
+            ),
+            header_row=2,
+        )
+        self.assertEqual(
+            ws["C2"].value,
+            "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
+        )
+
     def test_extract_fields_deve_capturar_artigo_fora_de_6_7_8(self):
         lines = [
             "Art. 5º (439): RMV | IV - Fortalecimento da capacidade de investigação",

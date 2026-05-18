@@ -16,10 +16,7 @@ ITEM_RE = re.compile(
 ACTION_HEADER_KEY = "acao_art"
 ACTION_HEADER_NUM_KEY = "acao_art_num"
 REQUIRED_TEMPLATE_NAME = "Planilha Base(atualizada).xlsx"
-ACTION_HEADER_PATTERN = re.compile(
-    r"^Ação conforme Art\.\s*\d+º\s+da portaria nº 685$",
-    re.IGNORECASE,
-)
+ACTION_HEADER_PATTERN = re.compile(r"^Ação conforme Art\.", re.IGNORECASE)
 PLAN_SIGNATURE_RE = re.compile(
     r"\b([A-Z]{2})\s*-\s*([A-Z0-9]+)\s*-\s*(20\d{2})\b"
 )
@@ -188,6 +185,27 @@ def resolve_art_by_plan_rule(sigla, ano):
     if sigla in {"VPSP", "MQVPSP"} and 2019 <= ano <= 2025:
         return "8"
     return None
+
+
+def resolve_action_header_title_by_plan(sigla, ano):
+    if not sigla or not ano:
+        return None
+    if int(ano) not in {2023, 2024}:
+        return None
+    sigla = str(sigla).upper()
+    transition_map = {
+        "RMV": ("5", "6"),
+        "EVM": ("6", "7"),
+        "MQVPSP": ("7", "8"),
+    }
+    pair = transition_map.get(sigla)
+    if not pair:
+        return None
+    art_439, art_685 = pair
+    return (
+        f"Ação conforme Art. {art_439}º da portaria nº 439 "
+        f"ou Art. {art_685}º da portaria nº 685"
+    )
 
 
 def is_analysis_template_sheet(ws) -> bool:
@@ -1080,9 +1098,23 @@ def get_analysis_items_header_info(template_path: Path):
     return header_row, headers, header_map
 
 
-def update_action_header(ws, rows, header_map, art_num_preferred=None, header_row=2):
+def update_action_header(
+    ws,
+    rows,
+    header_map,
+    art_num_preferred=None,
+    action_header_title_preferred=None,
+    header_row=2,
+):
     col_idx = header_map.get(ACTION_HEADER_KEY)
     if not col_idx or not rows:
+        return
+    if action_header_title_preferred:
+        ws.cell(
+            row=header_row,
+            column=col_idx,
+            value=action_header_title_preferred,
+        )
         return
     art_num = art_num_preferred
     if not art_num:
@@ -1104,6 +1136,7 @@ def write_excel(
     rows,
     header_map,
     art_num_preferred=None,
+    action_header_title_preferred=None,
     source_lines=None,
 ):
     wb = openpyxl.load_workbook(template_path)
@@ -1118,11 +1151,18 @@ def write_excel(
                 rows,
                 items_header_map,
                 art_num_preferred=art_num_preferred,
+                action_header_title_preferred=action_header_title_preferred,
                 header_row=header_row,
             )
             fill_worksheet(ws, rows, items_header_map, start_row=header_row + 1)
     else:
-        update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
+        update_action_header(
+            ws,
+            rows,
+            header_map,
+            art_num_preferred=art_num_preferred,
+            action_header_title_preferred=action_header_title_preferred,
+        )
         fill_worksheet(ws, rows, header_map)
     ws.sheet_view.topLeftCell = "A1"
     ws.sheet_view.selection[0].activeCell = "A1"
@@ -1136,6 +1176,7 @@ def generate_excel_bytes(
     rows,
     header_map,
     art_num_preferred=None,
+    action_header_title_preferred=None,
     source_lines=None,
 ) -> bytes:
     wb = openpyxl.load_workbook(template_path)
@@ -1150,11 +1191,18 @@ def generate_excel_bytes(
                 rows,
                 items_header_map,
                 art_num_preferred=art_num_preferred,
+                action_header_title_preferred=action_header_title_preferred,
                 header_row=header_row,
             )
             fill_worksheet(ws, rows, items_header_map, start_row=header_row + 1)
     else:
-        update_action_header(ws, rows, header_map, art_num_preferred=art_num_preferred)
+        update_action_header(
+            ws,
+            rows,
+            header_map,
+            art_num_preferred=art_num_preferred,
+            action_header_title_preferred=action_header_title_preferred,
+        )
         fill_worksheet(ws, rows, header_map)
     ws.sheet_view.topLeftCell = "A1"
     ws.sheet_view.selection[0].activeCell = "A1"
@@ -1253,6 +1301,9 @@ def main():
 
     signature = extract_plan_signature(lines)
     art_num_preferred = resolve_art_by_plan_rule(signature["sigla"], signature["ano"])
+    action_header_title_preferred = resolve_action_header_title_by_plan(
+        signature["sigla"], signature["ano"]
+    )
     analysis_mode = is_analysis_template_file(xlsx_path)
     if analysis_mode:
         _, _, items_header_map = get_analysis_items_header_info(xlsx_path)
@@ -1271,6 +1322,7 @@ def main():
         rows,
         header_map,
         art_num_preferred=art_num_preferred,
+        action_header_title_preferred=action_header_title_preferred,
         source_lines=lines,
     )
 

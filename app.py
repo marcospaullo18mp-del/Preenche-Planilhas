@@ -10,6 +10,7 @@ from planilha_engine import (
     extract_lines_from_pdf_file,
     extract_plan_signature,
     resolve_art_by_plan_rule,
+    resolve_action_header_title_by_plan,
     extract_analysis_data,
     collect_analysis_missing_cells,
     is_analysis_template_file,
@@ -202,6 +203,9 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                     art_num_preferred = resolve_art_by_plan_rule(
                         signature["sigla"], signature["ano"]
                     )
+                    action_header_title_preferred = resolve_action_header_title_by_plan(
+                        signature["sigla"], signature["ano"]
+                    )
                     if analysis_mode:
                         analysis_data = extract_analysis_data(lines)
                         sections = analysis_data.get("sections", [])
@@ -214,6 +218,7 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                             rows=rows,
                             header_map={},
                             art_num_preferred=art_num_preferred,
+                            action_header_title_preferred=action_header_title_preferred,
                             source_lines=lines,
                         )
                         missing_cells = set(collect_analysis_missing_cells(analysis_data))
@@ -252,6 +257,7 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                             rows,
                             header_map,
                             art_num_preferred=art_num_preferred,
+                            action_header_title_preferred=action_header_title_preferred,
                             source_lines=lines,
                         )
 
