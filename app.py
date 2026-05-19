@@ -171,6 +171,21 @@ st.markdown(
       background: #fafafa;
       font-weight: 600;
     }
+    div[data-testid="stFileUploaderDropzone"] {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    div[data-testid="stFileUploaderDropzoneInstructions"] {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      margin: 0 auto !important;
+    }
     div[data-testid="stFileUploaderDropzoneInstructions"] > div {
       font-size: 0 !important;
       line-height: 1.2;
