@@ -207,7 +207,7 @@ def resolve_action_header_title_by_plan(sigla, ano):
     art_439, art_685 = pair
     return (
         f"Ação conforme Art. {art_439}º da portaria nº 439 "
-        f"ou Art. {art_685}º da portaria nº 685"
+        f"e Art. {art_685}º da portaria nº 685"
     )
 
 
