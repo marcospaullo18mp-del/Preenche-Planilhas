@@ -58,16 +58,19 @@ if "show_title_update_modal" not in st.session_state:
     st.session_state.show_title_update_modal = False
 
 
-def _close_title_update_modal():
-    st.session_state.show_title_update_modal = False
+def _build_title_modal_decorator():
+    try:
+        return st.dialog(
+            "Atualização de títulos para planos 2023/2024",
+            width="small",
+            dismissible=True,
+            on_dismiss="rerun",
+        )
+    except TypeError:
+        return st.dialog("Atualização de títulos para planos 2023/2024")
 
 
-@st.dialog(
-    "Atualização de títulos para planos 2023/2024",
-    width="small",
-    dismissible=True,
-    on_dismiss=_close_title_update_modal,
-)
+@_build_title_modal_decorator()
 def _show_title_update_modal():
     st.markdown(
         """
@@ -80,7 +83,7 @@ def _show_title_update_modal():
         """
     )
     if st.button("Ok", key="title_update_modal_ok", type="primary"):
-        _close_title_update_modal()
+        st.session_state.show_title_update_modal = False
         st.rerun()
 
 page_icon = str(FAVICON_PATH) if FAVICON_PATH.exists() else "📄"
@@ -400,6 +403,7 @@ if result:
 
     download_blocked_by_modal = st.session_state.get("show_title_update_modal", False)
     if download_blocked_by_modal:
+        st.session_state.show_title_update_modal = False
         _show_title_update_modal()
 
     st.download_button(
