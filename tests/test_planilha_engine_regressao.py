@@ -23,6 +23,10 @@ class TestRegressaoVariacoesPDF(unittest.TestCase):
             "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
         )
         self.assertEqual(
+            resolve_action_header_title_by_plan("RMVI", 2023),
+            "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
+        )
+        self.assertEqual(
             resolve_action_header_title_by_plan("EVM", 2024),
             "Ação conforme Art. 6º da portaria nº 439 ou Art. 7º da portaria nº 685",
         )

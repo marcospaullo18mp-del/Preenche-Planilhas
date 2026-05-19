@@ -197,6 +197,7 @@ def resolve_action_header_title_by_plan(sigla, ano):
     sigla = str(sigla).upper()
     transition_map = {
         "RMV": ("5", "6"),
+        "RMVI": ("5", "6"),
         "EVM": ("6", "7"),
         "MQVPSP": ("7", "8"),
     }
