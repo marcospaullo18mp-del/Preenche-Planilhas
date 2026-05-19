@@ -177,6 +177,8 @@ def extract_plan_signature(lines):
 def resolve_art_by_plan_rule(sigla, ano):
     if not sigla or not ano:
         return None
+    if int(ano) in {2019, 2020, 2021, 2022, 2025, 2026}:
+        return None
     sigla = str(sigla).upper()
     if sigla in {"ECV", "FISPDS", "RMVI"} and 2019 <= ano <= 2025:
         return "6"
@@ -1118,7 +1120,25 @@ def update_action_header(
         return
     art_num = art_num_preferred
     if not art_num:
-        art_num = rows[0].get(ACTION_HEADER_NUM_KEY)
+        counts = {}
+        first_position = {}
+        for idx, row in enumerate(rows):
+            candidate = str(row.get(ACTION_HEADER_NUM_KEY) or "").strip()
+            if candidate not in {"6", "7", "8"}:
+                continue
+            counts[candidate] = counts.get(candidate, 0) + 1
+            if candidate not in first_position:
+                first_position[candidate] = idx
+        best_art = None
+        best_count = -1
+        best_pos = len(rows) + 1
+        for candidate, count in counts.items():
+            pos = first_position[candidate]
+            if count > best_count or (count == best_count and pos < best_pos):
+                best_art = candidate
+                best_count = count
+                best_pos = pos
+        art_num = best_art
     if not art_num:
         return
     if str(art_num) not in {"6", "7", "8"}:

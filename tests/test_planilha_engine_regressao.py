@@ -11,6 +11,7 @@ from planilha_engine import (
     extract_meta_especifica_sections,
     fill_analysis_template,
     resolve_action_header_title_by_plan,
+    resolve_art_by_plan_rule,
     update_action_header,
 )
 
@@ -51,6 +52,29 @@ class TestRegressaoVariacoesPDF(unittest.TestCase):
             ws["C2"].value,
             "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
         )
+
+    def test_update_action_header_deve_usar_artigo_mais_frequente_nas_linhas(self):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws["C2"] = "Ação conforme Art. 7º da portaria nº 685"
+        rows = [
+            {ACTION_HEADER_NUM_KEY: "8"},
+            {ACTION_HEADER_NUM_KEY: "6"},
+            {ACTION_HEADER_NUM_KEY: "6"},
+            {ACTION_HEADER_NUM_KEY: "5"},
+            {ACTION_HEADER_NUM_KEY: ""},
+        ]
+        update_action_header(ws, rows, {ACTION_HEADER_KEY: 3}, header_row=2)
+        self.assertEqual(
+            ws["C2"].value,
+            "Ação conforme Art. 6º da portaria nº 685",
+        )
+
+    def test_resolve_art_by_plan_rule_deve_nao_fixar_artigo_nos_anos_especificos(self):
+        self.assertIsNone(resolve_art_by_plan_rule("MQVPSP", 2019))
+        self.assertIsNone(resolve_art_by_plan_rule("MQVPSP", 2022))
+        self.assertIsNone(resolve_art_by_plan_rule("MQVPSP", 2025))
+        self.assertIsNone(resolve_art_by_plan_rule("MQVPSP", 2026))
 
     def test_extract_fields_deve_capturar_artigo_fora_de_6_7_8(self):
         lines = [
