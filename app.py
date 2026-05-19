@@ -175,30 +175,36 @@ st.markdown(
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
+      gap: 0 !important;
+    }
+    div[data-testid="stFileUploaderDropzoneInstructions"] * {
+      margin: 0 !important;
+      padding: 0 !important;
     }
     div[data-testid="stFileUploaderDropzoneInstructions"] > div {
       font-size: 0 !important;
-      line-height: 1.2;
+      line-height: 0 !important;
       text-align: center;
-      margin: 0 !important;
+      display: block;
     }
     div[data-testid="stFileUploaderDropzoneInstructions"] > div::before {
       content: "Arraste e solte o PDF aqui";
       font-size: 1rem;
-      display: inline-block;
+      line-height: 1.15;
+      display: block;
     }
     div[data-testid="stFileUploaderDropzoneInstructions"] small {
       font-size: 0 !important;
-      line-height: 1.2;
+      line-height: 0 !important;
       text-align: center;
       display: block;
-      margin: 0 !important;
+      margin-top: -1px !important;
     }
     div[data-testid="stFileUploaderDropzoneInstructions"] small::before {
       content: "Tamanho máximo: 200MB por arquivo • PDF";
       font-size: 0.875rem;
-      display: inline-block;
+      line-height: 1.12;
+      display: block;
       white-space: nowrap;
     }
     div[data-testid="stFileUploaderDropzone"] button {
