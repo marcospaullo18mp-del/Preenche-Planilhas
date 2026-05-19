@@ -53,6 +53,36 @@ def resolve_template_path():
         return LOCAL_TEMPLATE_PATH, None
     return None, f"Template obrigatório não encontrado: {REQUIRED_TEMPLATE_NAME}."
 
+
+if "show_title_update_modal" not in st.session_state:
+    st.session_state.show_title_update_modal = False
+
+
+def _close_title_update_modal():
+    st.session_state.show_title_update_modal = False
+
+
+@st.dialog(
+    "Atualização de títulos para planos 2023/2024",
+    width="small",
+    dismissible=True,
+    on_dismiss=_close_title_update_modal,
+)
+def _show_title_update_modal():
+    st.markdown(
+        """
+        Os títulos da coluna **Ação conforme Art.** foram atualizados para os planos de **2023 e 2024**.
+
+        Regra aplicada:
+        - `RMV/RMVI`: Art. 5º da Portaria nº 439 **ou** Art. 6º da Portaria nº 685
+        - `EVM`: Art. 6º da Portaria nº 439 **ou** Art. 7º da Portaria nº 685
+        - `MQVPSP`: Art. 7º da Portaria nº 439 **ou** Art. 8º da Portaria nº 685
+        """
+    )
+    if st.button("Ok", key="title_update_modal_ok", type="primary"):
+        _close_title_update_modal()
+        st.rerun()
+
 page_icon = str(FAVICON_PATH) if FAVICON_PATH.exists() else "📄"
 st.set_page_config(
     page_title="Gerador de Planilha de Itens - FAF", page_icon=page_icon, layout="centered"
@@ -339,6 +369,9 @@ if st.button("Processar", type="primary", disabled=uploaded_file is None):
                             "missing_cells": sorted(missing_cells),
                             "missing_items_count": len(missing_rows),
                         }
+                    st.session_state.show_title_update_modal = (
+                        signature.get("ano") in {2023, 2024}
+                    )
                     status.update(label="Processamento concluído.", state="complete")
         except Exception as exc:
             st.exception(exc)
@@ -365,6 +398,10 @@ if result:
     if missing_count:
         st.warning("Alguns itens possuem campos em branco. Veja os detalhes abaixo.")
 
+    download_blocked_by_modal = st.session_state.get("show_title_update_modal", False)
+    if download_blocked_by_modal:
+        _show_title_update_modal()
+
     st.download_button(
         "Baixar Planilha",
         data=result["excel_bytes"],
@@ -372,6 +409,12 @@ if result:
         mime=(
             "application/vnd.openxmlformats-officedocument."
             "spreadsheetml.sheet"
+        ),
+        disabled=download_blocked_by_modal,
+        help=(
+            "Feche o aviso de atualização (Ok ou X) para liberar o download."
+            if download_blocked_by_modal
+            else None
         ),
     )
 
