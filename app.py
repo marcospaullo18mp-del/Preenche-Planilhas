@@ -138,6 +138,44 @@ st.markdown(
       background: #fafafa;
       font-weight: 600;
     }
+    div[data-testid="stFileUploaderDropzoneInstructions"] > div {
+      visibility: hidden;
+      position: relative;
+      min-height: 1.4em;
+    }
+    div[data-testid="stFileUploaderDropzoneInstructions"] > div::after {
+      content: "Arraste e solte o PDF aqui";
+      visibility: visible;
+      position: absolute;
+      inset: 0;
+      text-align: center;
+    }
+    div[data-testid="stFileUploaderDropzoneInstructions"] small {
+      visibility: hidden;
+      position: relative;
+      min-height: 1.2em;
+      display: inline-block;
+    }
+    div[data-testid="stFileUploaderDropzoneInstructions"] small::after {
+      content: "Tamanho máximo: 200MB por arquivo • PDF";
+      visibility: visible;
+      position: absolute;
+      inset: 0;
+      text-align: center;
+      white-space: nowrap;
+    }
+    div[data-testid="stFileUploaderDropzone"] button {
+      color: transparent;
+      position: relative;
+    }
+    div[data-testid="stFileUploaderDropzone"] button::after {
+      content: "Selecionar arquivo";
+      color: inherit;
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
     </style>
     """,
     unsafe_allow_html=True,
