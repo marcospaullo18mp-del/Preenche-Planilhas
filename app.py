@@ -139,42 +139,39 @@ st.markdown(
       font-weight: 600;
     }
     div[data-testid="stFileUploaderDropzoneInstructions"] > div {
-      visibility: hidden;
-      position: relative;
-      min-height: 1.4em;
-    }
-    div[data-testid="stFileUploaderDropzoneInstructions"] > div::after {
-      content: "Arraste e solte o PDF aqui";
-      visibility: visible;
-      position: absolute;
-      inset: 0;
+      font-size: 0 !important;
+      line-height: 1.4;
       text-align: center;
     }
-    div[data-testid="stFileUploaderDropzoneInstructions"] small {
-      visibility: hidden;
-      position: relative;
-      min-height: 1.2em;
+    div[data-testid="stFileUploaderDropzoneInstructions"] > div::before {
+      content: "Arraste e solte o PDF aqui";
+      font-size: 1rem;
       display: inline-block;
     }
-    div[data-testid="stFileUploaderDropzoneInstructions"] small::after {
-      content: "Tamanho máximo: 200MB por arquivo • PDF";
-      visibility: visible;
-      position: absolute;
-      inset: 0;
+    div[data-testid="stFileUploaderDropzoneInstructions"] small {
+      font-size: 0 !important;
+      line-height: 1.3;
       text-align: center;
+      display: block;
+    }
+    div[data-testid="stFileUploaderDropzoneInstructions"] small::before {
+      content: "Tamanho máximo: 200MB por arquivo • PDF";
+      font-size: 0.875rem;
+      display: inline-block;
       white-space: nowrap;
     }
     div[data-testid="stFileUploaderDropzone"] button {
-      color: transparent;
-      position: relative;
+      font-size: 0 !important;
+      line-height: 1.2;
     }
-    div[data-testid="stFileUploaderDropzone"] button::after {
+    div[data-testid="stFileUploaderDropzone"] button * {
+      font-size: 0 !important;
+    }
+    div[data-testid="stFileUploaderDropzone"] button::before {
       content: "Selecionar arquivo";
-      color: inherit;
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
+      font-size: 0.95rem;
+      line-height: 1.2;
+      display: inline-block;
     }
     </style>
     """,
