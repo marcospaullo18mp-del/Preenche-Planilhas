@@ -9,7 +9,8 @@ import pdfplumber
 import openpyxl
 from openpyxl.cell.cell import MergedCell
 
-META_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
+META_HEADER_PATTERN = r"(?:A[ÇC][ÃA]O\s*/\s*)?META ESPEC[ÍI]FICA"
+META_RE = re.compile(rf"^{META_HEADER_PATTERN}\s+(\d+)", re.IGNORECASE)
 ITEM_RE = re.compile(
     r"^Item\s*(\d+)\s*(Planejado|Aprovado|Cancelado)?", re.IGNORECASE
 )
@@ -112,7 +113,7 @@ def parse_int(value: str):
 def normalize_pdf_text(text: str) -> str:
     text = text.replace("\x0c", "\n")
     text = re.sub(
-        r"(META ESPEC[ÍI]FICA\s+\d+)", r"\n\1\n", text, flags=re.IGNORECASE
+        rf"({META_HEADER_PATTERN}\s+\d+)", r"\n\1\n", text, flags=re.IGNORECASE
     )
     text = re.sub(
         r"(Item\s*\d+\s*(?:Planejado|Aprovado|Cancelado)?)",
@@ -296,7 +297,9 @@ INDICADOR_GERAL_MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 VALOR_REFERENCIA_RE = re.compile(r"valor de refer[eê]ncia\s*:", re.IGNORECASE)
-META_ESPECIFICA_LINE_RE = re.compile(r"^META ESPEC[ÍI]FICA\s+(\d+)", re.IGNORECASE)
+META_ESPECIFICA_LINE_RE = re.compile(
+    rf"^{META_HEADER_PATTERN}\s+(\d+)", re.IGNORECASE
+)
 SECTION_LABEL_PATTERNS = [
     ("descricao_indicador", re.compile(r"^Descri[cç][aã]o do Indicador:\s*(.*)", re.IGNORECASE)),
     ("formula", re.compile(r"^F[oó]rmula:\s*(.*)", re.IGNORECASE)),
@@ -338,7 +341,7 @@ def extract_meta_geral(lines) -> str:
         if META_GERAL_LINE_RE.match(line):
             collected = []
             for next_line in lines[idx + 1:]:
-                if re.match(r"^(Justificativa|Indicador Geral de Resultado|META ESPEC[ÍI]FICA)", next_line, re.IGNORECASE):
+                if re.match(rf"^(Justificativa|Indicador Geral de Resultado|{META_HEADER_PATTERN})", next_line, re.IGNORECASE):
                     break
                 collected.append(next_line)
             return blank_if_dash_only(" ".join(collected))
@@ -367,7 +370,7 @@ def extract_indicador_geral_completo(lines) -> str:
         if inline:
             collected.append(inline)
         for next_line in lines[idx + 1:]:
-            if re.match(r"^META ESPEC[ÍI]FICA", next_line, re.IGNORECASE):
+            if re.match(rf"^{META_HEADER_PATTERN}", next_line, re.IGNORECASE):
                 break
             if re.match(r"^Meta Geral", next_line, re.IGNORECASE):
                 inline_meta = _extract_text_after_marker(
@@ -400,7 +403,7 @@ def extract_indicador_geral_valor_referencia(lines) -> str:
             continue
         collected = [line[marker_match.start():].strip()]
         for next_line in lines[idx + 1:]:
-            if re.match(r"^(META ESPEC[ÍI]FICA|Descri[cç][aã]o do Indicador:|Itens da Meta|Status:)", next_line, re.IGNORECASE):
+            if re.match(rf"^({META_HEADER_PATTERN}|Descri[cç][aã]o do Indicador:|Itens da Meta|Status:)", next_line, re.IGNORECASE):
                 break
             collected.append(next_line)
         return blank_if_dash_only(" ".join(collected))

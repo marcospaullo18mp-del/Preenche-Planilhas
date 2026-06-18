@@ -10,6 +10,7 @@ from planilha_engine import (
     extract_indicador_geral_completo,
     extract_meta_especifica_sections,
     fill_analysis_template,
+    parse_items,
     resolve_action_header_title_by_plan,
     resolve_art_by_plan_rule,
     update_action_header,
@@ -117,6 +118,33 @@ class TestRegressaoVariacoesPDF(unittest.TestCase):
             "META ESPECÍFICA 1",
         ]
         self.assertEqual(extract_indicador_geral_completo(lines), "Taxa Z")
+
+    def test_deve_aceitar_acao_meta_especifica_na_extracao_de_itens(self):
+        lines = [
+            "AÇÃO / META ESPECÍFICA 2",
+            "Item 1 Planejado",
+            "Bem/Serviço: Exemplo",
+        ]
+        items = parse_items(lines)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["meta"], 2)
+        self.assertEqual(items[0]["item"], 1)
+
+    def test_deve_aceitar_acao_meta_especifica_na_extracao_de_analise(self):
+        lines = [
+            "AÇÃO / META ESPECÍFICA 1",
+            "Reduzir a violência",
+            "Status: Planejado",
+            "Descrição do Indicador: Taxa do EVM",
+            "Fórmula: (A-B)/A",
+            "Carteira de Políticas do MJSP: Política X",
+            "Meta do PNSP: Meta PNSP X",
+            "Meta do PESP: Meta PESP X",
+        ]
+        sections = extract_meta_especifica_sections(lines)
+        self.assertEqual(len(sections), 1)
+        self.assertEqual(sections[0]["numero_meta"], 1)
+        self.assertEqual(sections[0]["meta_texto"], "Reduzir a violência")
 
     def test_periodicidade_com_fonte_ano_inline_padrao_antigo(self):
         lines = [
