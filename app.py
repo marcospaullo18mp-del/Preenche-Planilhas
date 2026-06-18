@@ -77,9 +77,9 @@ def _show_title_update_modal():
         Os títulos da coluna **Ação conforme Art.** foram atualizados para os planos de **2023 e 2024**.
 
         Regra aplicada:
-        - `RMVI`: Art. 5º da Portaria nº 439 **e** Art. 6º da Portaria nº 685
-        - `EVM`: Art. 6º da Portaria nº 439 **e** Art. 7º da Portaria nº 685
-        - `MQVPSP`: Art. 7º da Portaria nº 439 **e** Art. 8º da Portaria nº 685
+        - `RMV/RMVI`: Art. 5º da Portaria nº 439 **ou** Art. 6º da Portaria nº 685
+        - `EVM`: Art. 6º da Portaria nº 439 **ou** Art. 7º da Portaria nº 685
+        - `MQVPSP`: Art. 7º da Portaria nº 439 **ou** Art. 8º da Portaria nº 685
         """
     )
     if st.button("Ok", key="title_update_modal_ok", type="primary"):
