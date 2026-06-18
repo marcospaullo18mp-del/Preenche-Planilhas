@@ -21,19 +21,19 @@ class TestRegressaoVariacoesPDF(unittest.TestCase):
     def test_resolve_action_header_title_by_plan_para_2023_2024(self):
         self.assertEqual(
             resolve_action_header_title_by_plan("RMV", 2023),
-            "Ação conforme Art. 5º da portaria nº 439 e Art. 6º da portaria nº 685",
+            "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
         )
         self.assertEqual(
             resolve_action_header_title_by_plan("RMVI", 2023),
-            "Ação conforme Art. 5º da portaria nº 439 e Art. 6º da portaria nº 685",
+            "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
         )
         self.assertEqual(
             resolve_action_header_title_by_plan("EVM", 2024),
-            "Ação conforme Art. 6º da portaria nº 439 e Art. 7º da portaria nº 685",
+            "Ação conforme Art. 6º da portaria nº 439 ou Art. 7º da portaria nº 685",
         )
         self.assertEqual(
             resolve_action_header_title_by_plan("MQVPSP", 2024),
-            "Ação conforme Art. 7º da portaria nº 439 e Art. 8º da portaria nº 685",
+            "Ação conforme Art. 7º da portaria nº 439 ou Art. 8º da portaria nº 685",
         )
         self.assertIsNone(resolve_action_header_title_by_plan("RMV", 2025))
 
@@ -49,13 +49,13 @@ class TestRegressaoVariacoesPDF(unittest.TestCase):
             art_num_preferred=None,
             action_header_title_preferred=(
                 "Ação conforme Art. 5º da portaria nº 439 "
-                "e Art. 6º da portaria nº 685"
+                "ou Art. 6º da portaria nº 685"
             ),
             header_row=2,
         )
         self.assertEqual(
             ws["C2"].value,
-            "Ação conforme Art. 5º da portaria nº 439 e Art. 6º da portaria nº 685",
+            "Ação conforme Art. 5º da portaria nº 439 ou Art. 6º da portaria nº 685",
         )
 
     def test_update_action_header_deve_usar_artigo_mais_frequente_nas_linhas(self):
