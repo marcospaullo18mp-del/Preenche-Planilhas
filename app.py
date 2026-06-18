@@ -366,8 +366,8 @@ if result:
     if missing_count:
         st.warning("Alguns itens possuem campos em branco. Veja os detalhes abaixo.")
 
-    download_blocked_by_modal = st.session_state.get("show_title_update_modal", False)
-    if download_blocked_by_modal:
+    show_title_update_modal = st.session_state.get("show_title_update_modal", False)
+    if show_title_update_modal:
         st.session_state.show_title_update_modal = False
         _show_title_update_modal()
 
@@ -378,12 +378,6 @@ if result:
         mime=(
             "application/vnd.openxmlformats-officedocument."
             "spreadsheetml.sheet"
-        ),
-        disabled=download_blocked_by_modal,
-        help=(
-            "Feche o aviso de atualização (Ok ou X) para liberar o download."
-            if download_blocked_by_modal
-            else None
         ),
     )
 
